@@ -1,4 +1,10 @@
-CREATE TYPE IF NOT EXISTS service_request_status AS ENUM ('pending', 'in_progress', 'completed', 'cancelled');
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'service_request_status') THEN
+        CREATE TYPE service_request_status AS ENUM ('pending', 'in_progress', 'completed', 'cancelled');
+    END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS service_requests (
     id              BIGSERIAL PRIMARY KEY,
