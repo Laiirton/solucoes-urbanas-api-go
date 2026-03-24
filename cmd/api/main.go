@@ -32,7 +32,10 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(db.Pool)
-	router := routes.Setup(userRepo, cfg.JWTSecret)
+	serviceRepo := repository.NewServiceRepository(db.Pool)
+	srRepo := repository.NewServiceRequestRepository(db.Pool)
+
+	router := routes.Setup(userRepo, serviceRepo, srRepo, cfg.JWTSecret)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server starting on %s", addr)

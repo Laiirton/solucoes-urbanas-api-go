@@ -12,7 +12,12 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
 
-func Setup(userRepo *repository.UserRepository, jwtSecret string) *chi.Mux {
+func Setup(
+	userRepo *repository.UserRepository,
+	serviceRepo *repository.ServiceRepository,
+	srRepo *repository.ServiceRequestRepository,
+	jwtSecret string,
+) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -22,6 +27,8 @@ func Setup(userRepo *repository.UserRepository, jwtSecret string) *chi.Mux {
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo)
+	serviceHandler := handlers.NewServiceHandler(serviceRepo)
+	srHandler := handlers.NewServiceRequestHandler(srRepo)
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -34,19 +41,36 @@ func Setup(userRepo *repository.UserRepository, jwtSecret string) *chi.Mux {
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
-		// Public routes
+		// Public auth routes
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+
+		// Public service routes (read-only)
+		r.Get("/services", serviceHandler.ListServices)
+		r.Get("/services/{id}", serviceHandler.GetService)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(jwtSecret))
 
+			// Users
 			r.Get("/users", userHandler.ListUsers)
 			r.Get("/users/me", userHandler.GetMe)
 			r.Get("/users/{id}", userHandler.GetUser)
 			r.Put("/users/{id}", userHandler.UpdateUser)
 			r.Delete("/users/{id}", userHandler.DeleteUser)
+
+			// Services (write)
+			r.Post("/services", serviceHandler.CreateService)
+			r.Put("/services/{id}", serviceHandler.UpdateService)
+			r.Delete("/services/{id}", serviceHandler.DeleteService)
+
+			// Service Requests
+			r.Post("/service-requests", srHandler.CreateServiceRequest)
+			r.Get("/service-requests", srHandler.ListServiceRequests)
+			r.Get("/service-requests/{id}", srHandler.GetServiceRequest)
+			r.Patch("/service-requests/{id}/status", srHandler.UpdateServiceRequestStatus)
+			r.Delete("/service-requests/{id}", srHandler.DeleteServiceRequest)
 		})
 	})
 
