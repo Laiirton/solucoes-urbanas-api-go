@@ -10,12 +10,14 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/handlers"
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
+	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 )
 
 func Setup(
 	userRepo *repository.UserRepository,
 	serviceRepo *repository.ServiceRepository,
 	srRepo *repository.ServiceRequestRepository,
+	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -28,7 +30,7 @@ func Setup(
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo)
 	serviceHandler := handlers.NewServiceHandler(serviceRepo)
-	srHandler := handlers.NewServiceRequestHandler(srRepo)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, storageService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
 	// Health check
