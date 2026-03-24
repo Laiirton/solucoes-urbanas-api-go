@@ -29,7 +29,8 @@ func Setup(
 	userHandler := handlers.NewUserHandler(userRepo)
 	serviceHandler := handlers.NewServiceHandler(serviceRepo)
 	srHandler := handlers.NewServiceRequestHandler(srRepo)
-
+	geoHandler := handlers.NewGeolocationHandler()
+	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -44,6 +45,9 @@ func Setup(
 		// Public auth routes
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+		
+		// Geolocation route
+		r.Get("/geolocation", geoHandler.Search)
 
 		// Public service routes (read-only)
 		r.Get("/services", serviceHandler.ListServices)
@@ -52,6 +56,9 @@ func Setup(
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(jwtSecret))
+
+			// Home
+			r.Get("/home", homeHandler.Index)
 
 			// Users
 			r.Get("/users", userHandler.ListUsers)
