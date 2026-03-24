@@ -1,6 +1,10 @@
 package routes
 
 import (
+	"encoding/json"
+	"net/http"
+	"time"
+
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/handlers"
@@ -19,21 +23,31 @@ func Setup(userRepo *repository.UserRepository, jwtSecret string) *chi.Mux {
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo)
 
-	// Public routes
-	r.Group(func(r chi.Router) {
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
+	// Health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "ok",
+			"timestamp": time.Now().UTC(),
+		})
 	})
 
-	// Protected routes
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(jwtSecret))
+	// Routes under /api
+	r.Route("/api", func(r chi.Router) {
+		// Public routes
+		r.Post("/auth/register", authHandler.Register)
+		r.Post("/auth/login", authHandler.Login)
 
-		r.Get("/users", userHandler.ListUsers)
-		r.Get("/users/me", userHandler.GetMe)
-		r.Get("/users/{id}", userHandler.GetUser)
-		r.Put("/users/{id}", userHandler.UpdateUser)
-		r.Delete("/users/{id}", userHandler.DeleteUser)
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Auth(jwtSecret))
+
+			r.Get("/users", userHandler.ListUsers)
+			r.Get("/users/me", userHandler.GetMe)
+			r.Get("/users/{id}", userHandler.GetUser)
+			r.Put("/users/{id}", userHandler.UpdateUser)
+			r.Delete("/users/{id}", userHandler.DeleteUser)
+		})
 	})
 
 	return r
