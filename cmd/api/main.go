@@ -9,6 +9,7 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/database"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 	"github.com/laiirton/solucoes-urbanas-api/internal/routes"
+	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 )
 
 func main() {
@@ -19,6 +20,9 @@ func main() {
 	}
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is required")
+	}
+	if cfg.SupabaseURL == "" || cfg.SupabaseKey == "" {
+		log.Println("Warning: SUPABASE_URL or SUPABASE_KEY not provided. File uploads may fail.")
 	}
 
 	db, err := database.Connect(cfg.DatabaseURL)
@@ -35,7 +39,9 @@ func main() {
 	serviceRepo := repository.NewServiceRepository(db.Pool)
 	srRepo := repository.NewServiceRequestRepository(db.Pool)
 
-	router := routes.Setup(userRepo, serviceRepo, srRepo, cfg.JWTSecret)
+	storageService := services.NewSupabaseStorageService(cfg.SupabaseURL, cfg.SupabaseKey, cfg.SupabaseBucket)
+
+	router := routes.Setup(userRepo, serviceRepo, srRepo, storageService, cfg.JWTSecret)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server starting on %s", addr)
