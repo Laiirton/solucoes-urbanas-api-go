@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -157,3 +158,131 @@ func (r *ServiceRequestRepository) DeleteServiceRequest(ctx context.Context, id 
 	}
 	return nil
 }
+
+func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64) (*models.HomeResponse, error) {
+	baseWhere := ""
+	var args []interface{}
+
+	if !isAdmin {
+		baseWhere = "WHERE sr.user_id = $1"
+		args = append(args, userID)
+	}
+
+	statsQuery := fmt.Sprintf(`
+		SELECT status, COUNT(*) 
+		FROM service_requests sr
+		%s
+		GROUP BY status`, baseWhere)
+	
+	rows, err := r.db.Query(ctx, statsQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stats: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	total := 0
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		counts[status] = count
+		total += count
+	}
+
+	pct := func(val, tot int) int {
+		if tot > 0 {
+			return int((float64(val) / float64(tot)) * 100)
+		}
+		return 0
+	}
+
+	unresolved := counts["pending"] + counts["in_progress"] + counts["urgent"]
+
+	stats := models.HomeStats{
+		TotalRequests:      models.StatDetail{Total: total, Percent: 100},
+		PendingRequests:    models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
+		InProgressRequests: models.StatDetail{Total: counts["in_progress"], Percent: pct(counts["in_progress"], total)},
+		CompletedRequests:  models.StatDetail{Total: counts["completed"], Percent: pct(counts["completed"], total)},
+		CancelledRequests:  models.StatDetail{Total: counts["cancelled"], Percent: pct(counts["cancelled"], total)},
+		UrgentRequests:     models.StatDetail{Total: counts["urgent"], Percent: pct(counts["urgent"], total)},
+		UnresolvedRequests: models.StatDetail{Total: unresolved, Percent: pct(unresolved, total)},
+	}
+
+	catQuery := fmt.Sprintf(`
+		SELECT category, COUNT(*) 
+		FROM service_requests sr
+		%s
+		GROUP BY category
+		ORDER BY COUNT(*) DESC`, baseWhere)
+
+	catRows, err := r.db.Query(ctx, catQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", err)
+	}
+	defer catRows.Close()
+
+	var categories []models.CategoryStat
+	for catRows.Next() {
+		var cat string
+		var count int
+		if err := catRows.Scan(&cat, &count); err != nil {
+			return nil, err
+		}
+		categories = append(categories, models.CategoryStat{
+			Category: cat,
+			Percent:  pct(count, total),
+		})
+	}
+	if categories == nil {
+		categories = []models.CategoryStat{}
+	}
+
+	recentQuery := fmt.Sprintf(`
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		FROM service_requests sr
+		LEFT JOIN users u ON sr.user_id = u.id
+		%s
+		ORDER BY sr.created_at DESC
+		LIMIT 10`, baseWhere)
+	
+	recentRows, err := r.db.Query(ctx, recentQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent requests: %w", err)
+	}
+	defer recentRows.Close()
+
+	var recent []models.RecentRequest
+	for recentRows.Next() {
+		var req models.RecentRequest
+		var rawData []byte
+		var createdAt time.Time
+		if err := recentRows.Scan(&req.ID, &req.Name, &req.Service, &rawData, &req.Status, &createdAt); err != nil {
+			return nil, err
+		}
+		req.Date = createdAt.Format("2006-01-02")
+		
+		var data map[string]interface{}
+		if err := json.Unmarshal(rawData, &data); err == nil {
+			if addr, ok := data["address"].(string); ok {
+				req.Address = &addr
+			} else if end, ok := data["endereco"].(string); ok {
+				req.Address = &end
+			}
+		}
+		
+		recent = append(recent, req)
+	}
+	if recent == nil {
+		recent = []models.RecentRequest{}
+	}
+
+	return &models.HomeResponse{
+		Stats:          stats,
+		Categories:     categories,
+		RecentRequests: recent,
+	}, nil
+}
+
