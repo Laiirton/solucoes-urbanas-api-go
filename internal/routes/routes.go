@@ -47,7 +47,7 @@ func Setup(
 		// Public auth routes
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
-		
+
 		// Geolocation route
 		r.Get("/geolocation", geoHandler.Search)
 
@@ -58,6 +58,9 @@ func Setup(
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(jwtSecret))
+
+			// Auth
+			r.Post("/auth/logout", authHandler.Logout)
 
 			// Home
 			r.Get("/home", homeHandler.Index)
