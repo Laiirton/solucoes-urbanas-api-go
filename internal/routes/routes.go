@@ -18,6 +18,7 @@ func Setup(
 	userRepo *repository.UserRepository,
 	serviceRepo *repository.ServiceRepository,
 	srRepo *repository.ServiceRequestRepository,
+	newsRepo *repository.NewsRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -42,6 +43,7 @@ func Setup(
 	srHandler := handlers.NewServiceRequestHandler(srRepo, storageService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
+	newsHandler := handlers.NewNewsHandler(newsRepo, storageService)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -63,6 +65,10 @@ func Setup(
 		// Public service routes (read-only)
 		r.Get("/services", serviceHandler.ListServices)
 		r.Get("/services/{id}", serviceHandler.GetService)
+
+		// Public news routes (read-only)
+		r.Get("/news", newsHandler.ListNews)
+		r.Get("/news/{id}", newsHandler.GetNews)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -86,6 +92,11 @@ func Setup(
 			r.Post("/services", serviceHandler.CreateService)
 			r.Put("/services/{id}", serviceHandler.UpdateService)
 			r.Delete("/services/{id}", serviceHandler.DeleteService)
+
+			// News (write)
+			r.Post("/news", newsHandler.CreateNews)
+			r.Put("/news/{id}", newsHandler.UpdateNews)
+			r.Delete("/news/{id}", newsHandler.DeleteNews)
 
 			// Service Requests
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
