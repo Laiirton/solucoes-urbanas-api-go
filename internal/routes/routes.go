@@ -69,6 +69,7 @@ func Setup(
 			r.Use(middleware.Auth(jwtSecret))
 
 			// Auth
+			r.Get("/auth/me", userHandler.GetMe)
 			r.Post("/auth/logout", authHandler.Logout)
 
 			// Home
