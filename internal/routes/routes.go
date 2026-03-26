@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/laiirton/solucoes-urbanas-api/internal/handlers"
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
@@ -26,6 +27,14 @@ func Setup(
 	r.Use(chiMiddleware.Logger)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(chiMiddleware.RequestID)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"*"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo)
