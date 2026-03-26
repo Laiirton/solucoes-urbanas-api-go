@@ -25,9 +25,9 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 
 	var birthDate *time.Time
 	if req.BirthDate != nil {
-		parsed, err := time.Parse("2006-01-02", *req.BirthDate)
+		parsed, err := time.Parse("02/01/2006", *req.BirthDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid birth_date format, expected YYYY-MM-DD: %w", err)
+			return nil, fmt.Errorf("invalid birth_date format, expected DD/MM/YYYY: %w", err)
 		}
 		birthDate = &parsed
 	}
