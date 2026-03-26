@@ -173,7 +173,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		FROM service_requests sr
 		%s
 		GROUP BY status`, baseWhere)
-	
+
 	rows, err := r.db.Query(ctx, statsQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stats: %w", err)
@@ -247,7 +247,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		%s
 		ORDER BY sr.created_at DESC
 		LIMIT 10`, baseWhere)
-	
+
 	recentRows, err := r.db.Query(ctx, recentQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recent requests: %w", err)
@@ -263,7 +263,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 			return nil, err
 		}
 		req.Date = createdAt.Format("2006-01-02")
-		
+
 		var data map[string]interface{}
 		if err := json.Unmarshal(rawData, &data); err == nil {
 			if addr, ok := data["address"].(string); ok {
@@ -272,7 +272,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 				req.Address = &end
 			}
 		}
-		
+
 		recent = append(recent, req)
 	}
 	if recent == nil {
@@ -285,4 +285,3 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		RecentRequests: recent,
 	}, nil
 }
-
