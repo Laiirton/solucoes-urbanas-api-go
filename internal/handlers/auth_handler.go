@@ -62,12 +62,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "email and password are required")
+	if req.Username == "" || req.Password == "" {
+		respondError(w, http.StatusBadRequest, "username and password are required")
 		return
 	}
 
-	user, err := h.userRepo.GetUserByEmail(r.Context(), req.Email)
+	user, err := h.userRepo.GetUserByUsername(r.Context(), req.Username)
 	if err != nil {
 		respondError(w, http.StatusUnauthorized, "invalid credentials")
 		return

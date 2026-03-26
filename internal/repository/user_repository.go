@@ -48,12 +48,12 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	return user, nil
 }
 
-func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+func (r *UserRepository) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
 	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, created_at, updated_at
-              FROM users WHERE email = $1`
+              FROM users WHERE username = $1`
 
 	user := &models.User{}
-	err := r.db.QueryRow(ctx, query, email).Scan(
+	err := r.db.QueryRow(ctx, query, username).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
 		&user.Type, &user.CreatedAt, &user.UpdatedAt,
