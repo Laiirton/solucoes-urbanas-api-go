@@ -48,7 +48,7 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	
+
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		http.Error(w, "Erro ao consultar serviço de geolocalização", http.StatusBadGateway)
@@ -70,7 +70,7 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 	first := body[0]
 	latStr, _ := first["lat"].(string)
 	lonStr, _ := first["lon"].(string)
-	
+
 	lat, _ := strconv.ParseFloat(latStr, 64)
 	lon, _ := strconv.ParseFloat(lonStr, 64)
 	displayName, _ := first["display_name"].(string)
