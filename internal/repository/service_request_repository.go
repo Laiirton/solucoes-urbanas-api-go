@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -50,8 +52,10 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
-	// Generate and set protocol number: SR-YYYYMMDD-{id}
-	protocol := fmt.Sprintf("SR-%s-%d", time.Now().Format("20060102"), sr.ID)
+	// Generate random protocol number: SR-YYYYMMDD + random 4 digits (e.g. SR-202603242048)
+	randomNum, _ := rand.Int(rand.Reader, big.NewInt(10000))
+	protocol := fmt.Sprintf("SR-%s%04d", time.Now().Format("20060102"), randomNum.Int64())
+
 	_, err = r.db.Exec(ctx,
 		`UPDATE service_requests SET protocol_number = $1 WHERE id = $2`,
 		protocol, sr.ID,
