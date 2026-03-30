@@ -69,12 +69,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userRepo.GetUserByUsername(r.Context(), req.Username)
 	if err != nil {
-		respondError(w, http.StatusUnauthorized, "invalid credentials")
+		respondError(w, http.StatusUnauthorized, "user not found")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		respondError(w, http.StatusUnauthorized, "invalid credentials")
+		respondError(w, http.StatusUnauthorized, "incorrect password")
 		return
 	}
 
