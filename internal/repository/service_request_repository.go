@@ -21,30 +21,26 @@ func NewServiceRequestRepository(db *pgxpool.Pool) *ServiceRequestRepository {
 }
 
 func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, userID *int64, req *models.CreateServiceRequestRequest) (*models.ServiceRequest, error) {
-	// Fetch category and title from the referenced service
-	var serviceCategory string
-	err := r.db.QueryRow(ctx,
-		`SELECT category FROM services WHERE id = $1 AND is_active = TRUE`,
-		req.ServiceID,
-	).Scan(&serviceCategory)
-	if err != nil {
-		return nil, fmt.Errorf("service not found or inactive: %w", err)
+	serviceCategory := req.Category
+	if serviceCategory == "" {
+		serviceCategory = "General"
 	}
 
 	// Insert without protocol_number first to get the ID
 	insertQuery := `
 		INSERT INTO service_requests
-			(user_id, service_id, service_title, category, request_data, attachments, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), NOW())
-		RETURNING id, user_id, service_id, protocol_number, service_title, category,
+			(user_id, service_title, category, request_data, attachments, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), NOW())
+		RETURNING id, user_id, protocol_number, service_title, category,
 		          request_data, attachments, status, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
+	var err error
 	err = r.db.QueryRow(ctx, insertQuery,
-		userID, req.ServiceID, req.ServiceTitle, serviceCategory,
+		userID, req.ServiceTitle, serviceCategory,
 		req.RequestData, req.Attachments,
 	).Scan(
-		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+		&sr.ID, &sr.UserID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 	)
@@ -69,13 +65,13 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 }
 
 func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id int64) (*models.ServiceRequest, error) {
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
+	query := `SELECT id, user_id, protocol_number, service_title, category,
 	                 request_data, attachments, status, created_at, updated_at
 	          FROM service_requests WHERE id = $1`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+		&sr.ID, &sr.UserID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 	)
@@ -86,7 +82,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 }
 
 func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context) ([]*models.ServiceRequest, error) {
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
+	query := `SELECT id, user_id, protocol_number, service_title, category,
 	                 request_data, attachments, status, created_at, updated_at
 	          FROM service_requests ORDER BY id DESC`
 
@@ -94,7 +90,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context) ([]*
 }
 
 func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64) ([]*models.ServiceRequest, error) {
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
+	query := `SELECT id, user_id, protocol_number, service_title, category,
 	                 request_data, attachments, status, created_at, updated_at
 	          FROM service_requests WHERE user_id = $1 ORDER BY id DESC`
 
@@ -112,7 +108,7 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 	for rows.Next() {
 		sr := &models.ServiceRequest{}
 		if err := rows.Scan(
-			&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+			&sr.ID, &sr.UserID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 			&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 		); err != nil {
@@ -137,12 +133,12 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 	query := `
 		UPDATE service_requests SET status = $1, updated_at = NOW()
 		WHERE id = $2
-		RETURNING id, user_id, service_id, protocol_number, service_title, category,
+		RETURNING id, user_id, protocol_number, service_title, category,
 		          request_data, attachments, status, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, status, id).Scan(
-		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+		&sr.ID, &sr.UserID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 	)
