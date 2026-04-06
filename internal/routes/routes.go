@@ -16,7 +16,6 @@ import (
 
 func Setup(
 	userRepo *repository.UserRepository,
-	serviceRepo *repository.ServiceRepository,
 	srRepo *repository.ServiceRequestRepository,
 	newsRepo *repository.NewsRepository,
 	storageService services.StorageService,
@@ -39,7 +38,6 @@ func Setup(
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo)
-	serviceHandler := handlers.NewServiceHandler(serviceRepo)
 	srHandler := handlers.NewServiceRequestHandler(srRepo, storageService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
@@ -62,10 +60,6 @@ func Setup(
 		// Geolocation route
 		r.Get("/geolocation", geoHandler.Search)
 
-		// Public service routes (read-only)
-		r.Get("/services", serviceHandler.ListServices)
-		r.Get("/services/{id}", serviceHandler.GetService)
-
 		// Public news routes (read-only)
 		r.Get("/news", newsHandler.ListNews)
 		r.Get("/news/{id}", newsHandler.GetNews)
@@ -87,11 +81,6 @@ func Setup(
 			r.Get("/users/{id}", userHandler.GetUser)
 			r.Put("/users/{id}", userHandler.UpdateUser)
 			r.Delete("/users/{id}", userHandler.DeleteUser)
-
-			// Services (write)
-			r.Post("/services", serviceHandler.CreateService)
-			r.Put("/services/{id}", serviceHandler.UpdateService)
-			r.Delete("/services/{id}", serviceHandler.DeleteService)
 
 			// News (write)
 			r.Post("/news", newsHandler.CreateNews)
