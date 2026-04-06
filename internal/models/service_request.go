@@ -8,7 +8,6 @@ import (
 type ServiceRequest struct {
 	ID             int64           `json:"id"`
 	UserID         *int64          `json:"user_id,omitempty"`
-	ServiceID      int64           `json:"service_id"`
 	ProtocolNumber *string         `json:"protocol_number,omitempty"`
 	ServiceTitle   string          `json:"service_title"`
 	Category       string          `json:"category"`
@@ -19,10 +18,10 @@ type ServiceRequest struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
-// CreateServiceRequestRequest — category is populated automatically from services.category
+// CreateServiceRequestRequest — category is now provided by the user
 type CreateServiceRequestRequest struct {
-	ServiceID    int64           `json:"service_id"`
 	ServiceTitle string          `json:"service_title"`
+	Category     string          `json:"category"`
 	RequestData  json.RawMessage `json:"request_data"`
 	Attachments  json.RawMessage `json:"attachments,omitempty"`
 }
