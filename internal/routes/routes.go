@@ -83,6 +83,7 @@ func Setup(
 
 			// Users
 			r.Get("/users", userHandler.ListUsers)
+			r.Post("/users", userHandler.CreateUser)
 			r.Get("/users/me", userHandler.GetMe)
 			r.Get("/users/{id}", userHandler.GetUser)
 			r.Put("/users/{id}", userHandler.UpdateUser)

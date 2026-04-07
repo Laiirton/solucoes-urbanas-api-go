@@ -60,6 +60,20 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `GET /api/users`
   - Lista todos os usuários.
+- `POST /api/users`
+  - Cria um novo usuário (administrativo).
+  - Payload JSON:
+    ```json
+    {
+      "username": "usuario123",
+      "email": "user@exemplo.com",
+      "password": "senha_forte",
+      "full_name": "Nome Completo",
+      "cpf": "123.456.789-00",
+      "birth_date": "01/01/1990",
+      "type": "user"
+    }
+    ```
 - `GET /api/users/me`
   - Retorna o perfil do usuário autenticado.
 - `GET /api/users/{id}`

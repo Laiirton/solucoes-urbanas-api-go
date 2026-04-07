@@ -9,6 +9,7 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserHandler struct {
@@ -30,6 +31,34 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		users = []*models.User{}
 	}
 	respondJSON(w, http.StatusOK, users)
+}
+
+// POST /users
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Email == "" || req.Password == "" || req.Username == "" {
+		respondError(w, http.StatusBadRequest, "username, email and password are required")
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	user, err := h.userRepo.CreateUser(r.Context(), &req, string(hashedPassword))
+	if err != nil {
+		respondError(w, http.StatusConflict, "could not create user: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, user)
 }
 
 // GET /users/{id}
