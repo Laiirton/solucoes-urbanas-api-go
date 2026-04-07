@@ -20,9 +20,10 @@ func NewUserHandler(userRepo *repository.UserRepository) *UserHandler {
 // GET /users
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
+	userType := r.URL.Query().Get("type")
 	page, limit := parsePagination(r)
 
-	users, err := h.userRepo.ListUsers(r.Context(), search, page, limit)
+	users, err := h.userRepo.ListUsers(r.Context(), search, userType, page, limit)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list users")
 		return
