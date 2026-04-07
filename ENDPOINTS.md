@@ -41,6 +41,13 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 - `GET /api/news/{id}`
   - Retorna uma notícia específica pelo `id`.
 
+## Serviços públicos
+
+- `GET /api/services`
+  - Lista todos os serviços ativos por padrão.
+- `GET /api/services/{id}`
+  - Retorna detalhes de um serviço específico pelo `id`.
+
 ## Rotas protegidas (JWT obrigatório)
 
 - `GET /api/auth/me`
@@ -86,6 +93,33 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
   - Aceita `multipart/form-data` similar ao POST.
 - `DELETE /api/news/{id}`
   - Exclui notícia por `id`.
+
+## Serviços (escrita)
+
+- `POST /api/services`
+  - Cria um novo serviço no catálogo.
+  - Payload JSON:
+    ```json
+    {
+      "title": "Troca de Lâmpada",
+      "description": "Pedido de manutenção de iluminação pública",
+      "category": "Iluminação",
+      "is_active": true
+    }
+    ```
+- `PUT /api/services/{id}`
+  - Atualiza um serviço existente.
+  - Payload JSON (campos opcionais):
+    ```json
+    {
+      "title": "Novo Título",
+      "description": "Nova descrição",
+      "category": "Nova Categoria",
+      "is_active": false
+    }
+    ```
+- `DELETE /api/services/{id}`
+  - Remove um serviço permanentemente.
 
 ## Pedidos de serviço
 
