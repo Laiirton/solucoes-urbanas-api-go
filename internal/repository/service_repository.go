@@ -74,9 +74,9 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 
 	if search != "" {
 		if whereApplied {
-			query += ` AND (title ILIKE $1 OR category ILIKE $1)`
+			query += ` AND (CAST(id AS TEXT) ILIKE $1 OR title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
 		} else {
-			query += ` WHERE title ILIKE $1 OR category ILIKE $1`
+			query += ` WHERE (CAST(id AS TEXT) ILIKE $1 OR title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
 		}
 		args = append(args, "%"+search+"%")
 	}

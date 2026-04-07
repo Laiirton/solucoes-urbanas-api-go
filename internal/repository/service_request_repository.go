@@ -94,7 +94,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 
 	var args []interface{}
 	if search != "" {
-		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR u.full_name ILIKE $1)`
+		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR sr.category ILIKE $1 OR u.full_name ILIKE $1)`
 		args = append(args, "%"+search+"%")
 	}
 
@@ -112,7 +112,7 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 
 	args := []interface{}{userID}
 	if search != "" {
-		query += ` AND (CAST(id AS TEXT) ILIKE $2 OR service_title ILIKE $2)`
+		query += ` AND (CAST(id AS TEXT) ILIKE $2 OR service_title ILIKE $2 OR category ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
 

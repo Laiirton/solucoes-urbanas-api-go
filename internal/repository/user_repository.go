@@ -91,16 +91,16 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 	whereApplied := false
 
 	if search != "" {
-		query += ` WHERE (username ILIKE $1 OR full_name ILIKE $1 OR email ILIKE $1)`
+		query += ` WHERE (CAST(id AS TEXT) ILIKE $1 OR username ILIKE $1 OR full_name ILIKE $1 OR email ILIKE $1 OR type ILIKE $1 OR cpf ILIKE $1)`
 		args = append(args, "%"+search+"%")
 		whereApplied = true
 	}
 
 	if userType != "" {
 		if whereApplied {
-			query += fmt.Sprintf(` AND type = $%d`, len(args)+1)
+			query += fmt.Sprintf(` AND type ILIKE $%d`, len(args)+1)
 		} else {
-			query += ` WHERE type = $1`
+			query += ` WHERE type ILIKE $1`
 		}
 		args = append(args, userType)
 	}
