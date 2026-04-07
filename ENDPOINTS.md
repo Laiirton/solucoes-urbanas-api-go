@@ -101,10 +101,15 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
   - Payload JSON:
     ```json
     {
-      "title": "Troca de Lâmpada",
-      "description": "Pedido de manutenção de iluminação pública",
-      "category": "Iluminação",
-      "is_active": true
+      "title": "Coleta de Lixo Especial",
+      "description": "Pedido de retirada de grandes volumes",
+      "category": "Limpeza Urbana",
+      "is_active": true,
+      "form_schema": [
+        {"name": "logradouro", "label": "Rua/Avenida", "type": "text", "required": true},
+        {"name": "bairro", "label": "Bairro", "type": "text", "required": true},
+        {"name": "volume", "label": "Qtd de Sacos", "type": "number", "required": false}
+      ]
     }
     ```
 - `PUT /api/services/{id}`
@@ -113,9 +118,9 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     ```json
     {
       "title": "Novo Título",
-      "description": "Nova descrição",
-      "category": "Nova Categoria",
-      "is_active": false
+      "form_schema": [
+        {"name": "ponto_referencia", "label": "Ponto de Referência", "type": "text", "required": false}
+      ]
     }
     ```
 - `DELETE /api/services/{id}`
