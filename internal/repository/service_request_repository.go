@@ -216,8 +216,13 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	var completedToday int
-	// We count completed today based on updated_at if status is 'completed'
-	r.db.QueryRow(ctx, "SELECT COUNT(*) FROM service_requests WHERE status = 'completed' AND updated_at::date = CURRENT_DATE").Scan(&completedToday)
+	completedTodayQuery := fmt.Sprintf(`
+		SELECT COUNT(*) 
+		FROM service_requests sr
+		%s
+		%s status = 'completed' AND updated_at::date = CURRENT_DATE
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	r.db.QueryRow(ctx, completedTodayQuery, args...).Scan(&completedToday)
 
 	stats := models.HomeStats{
 		TotalRequests:       models.StatDetail{Total: total, Percent: 100},
@@ -303,13 +308,15 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	// Volume for the last 7 days
 	var volume7d []models.VolumeStat
-	volQuery := `
+	volQuery := fmt.Sprintf(`
 		SELECT date_trunc('day', created_at) as day, COUNT(*) 
-		FROM service_requests 
-		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' 
+		FROM service_requests sr
+		%s
+		%s created_at >= CURRENT_DATE - INTERVAL '7 days' 
 		GROUP BY day 
-		ORDER BY day ASC`
-	vRows, err := r.db.Query(ctx, volQuery)
+		ORDER BY day ASC
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	vRows, err := r.db.Query(ctx, volQuery, args...)
 	if err == nil {
 		defer vRows.Close()
 		for vRows.Next() {
