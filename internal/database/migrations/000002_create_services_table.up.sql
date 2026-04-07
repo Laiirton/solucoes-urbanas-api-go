@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS services (
     title       VARCHAR   NOT NULL,
     description TEXT,
     category    VARCHAR   NOT NULL,
+    form_schema JSONB     NOT NULL DEFAULT '[]'::jsonb,
     is_active   BOOLEAN   NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW()
