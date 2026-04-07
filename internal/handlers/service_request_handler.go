@@ -17,11 +17,12 @@ import (
 
 type ServiceRequestHandler struct {
 	srRepo         *repository.ServiceRequestRepository
+	userRepo       *repository.UserRepository
 	storageService services.StorageService
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, storageService services.StorageService) *ServiceRequestHandler {
-	return &ServiceRequestHandler{srRepo: srRepo, storageService: storageService}
+func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, storageService services.StorageService) *ServiceRequestHandler {
+	return &ServiceRequestHandler{srRepo: srRepo, userRepo: userRepo, storageService: storageService}
 }
 
 // POST /service-requests
@@ -152,7 +153,23 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
-	respondJSON(w, http.StatusOK, sr)
+
+	detail := models.ServiceRequestDetailResponse{
+		ServiceRequest: sr,
+	}
+
+	if sr.UserID != nil {
+		user, err := h.userRepo.GetUserByID(r.Context(), *sr.UserID)
+		if err == nil {
+			detail.CreatedBy = user
+		}
+		count, err := h.srRepo.CountServiceRequestsByUser(r.Context(), *sr.UserID)
+		if err == nil {
+			detail.UserRequests = count
+		}
+	}
+
+	respondJSON(w, http.StatusOK, detail)
 }
 
 // PATCH /service-requests/{id}/status

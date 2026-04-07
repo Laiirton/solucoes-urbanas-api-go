@@ -52,6 +52,11 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
+	// Fetch the full name
+	if userID != nil {
+		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *userID).Scan(&sr.UserName)
+	}
+
 	// Generate a unique 8-digit random protocol number
 	// We use a retry loop to handle potential collisions in the unique constraint
 	var finalProtocol string
@@ -79,13 +84,15 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 }
 
 func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id int64) (*models.ServiceRequest, error) {
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
-	                 request_data, attachments, status, created_at, updated_at
-	          FROM service_requests WHERE id = $1`
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
+	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          WHERE sr.id = $1`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+		&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 	)
@@ -97,7 +104,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 
 func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
-	query := `SELECT sr.id, sr.user_id, sr.service_id, sr.protocol_number, sr.service_title, sr.category,
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
 	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id`
@@ -116,9 +123,11 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 
 func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
-	                 request_data, attachments, status, created_at, updated_at
-	          FROM service_requests WHERE user_id = $1`
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
+	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          WHERE sr.user_id = $1`
 
 	args := []interface{}{userID}
 	if search != "" {
@@ -143,7 +152,7 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 	for rows.Next() {
 		sr := &models.ServiceRequest{}
 		if err := rows.Scan(
-			&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+			&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 			&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
 		); err != nil {
@@ -185,6 +194,11 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update service request status: %w", err)
+	}
+
+	// Fetch user name
+	if sr.UserID != nil {
+		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *sr.UserID).Scan(&sr.UserName)
 	}
 	return sr, nil
 }
