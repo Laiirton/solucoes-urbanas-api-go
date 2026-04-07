@@ -25,7 +25,7 @@ type CreateUserRequest struct {
 	Email     string  `json:"email"`
 	FullName  *string `json:"full_name,omitempty"`
 	CPF       *string `json:"cpf,omitempty"`
-	BirthDate *string `json:"birth_date,omitempty"` 
+	BirthDate *string `json:"birth_date,omitempty"`
 	Type      *string `json:"type,omitempty"`
 }
 
