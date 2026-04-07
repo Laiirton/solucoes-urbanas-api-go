@@ -41,8 +41,14 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 			return
 		}
 
+		serviceIDStr := r.FormValue("service_id")
+		serviceID, err := strconv.ParseInt(serviceIDStr, 10, 64)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid service_id")
+			return
+		}
+		req.ServiceID = serviceID
 		req.ServiceTitle = r.FormValue("service_title")
-		req.Category = r.FormValue("category")
 
 		requestData := r.FormValue("request_data")
 		if requestData != "" {
@@ -91,8 +97,8 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 		}
 	}
 
-	if req.ServiceTitle == "" || req.Category == "" {
-		respondError(w, http.StatusBadRequest, "service_title and category are required")
+	if req.ServiceID == 0 || req.ServiceTitle == "" {
+		respondError(w, http.StatusBadRequest, "service_id and service_title are required")
 		return
 	}
 	if len(req.RequestData) == 0 {
