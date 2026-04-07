@@ -3,9 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
-
-	"github.com/go-chi/chi/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
@@ -22,7 +19,10 @@ func NewUserHandler(userRepo *repository.UserRepository) *UserHandler {
 
 // GET /users
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.userRepo.ListUsers(r.Context())
+	search := r.URL.Query().Get("search")
+	page, limit := parsePagination(r)
+
+	users, err := h.userRepo.ListUsers(r.Context(), search, page, limit)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list users")
 		return
@@ -135,16 +135,3 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // helpers
-func parseID(r *http.Request) (int64, error) {
-	return strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-}
-
-func respondJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v) //nolint:errcheck
-}
-
-func respondError(w http.ResponseWriter, status int, msg string) {
-	respondJSON(w, status, models.ErrorResponse{Error: msg})
-}

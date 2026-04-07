@@ -123,12 +123,15 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 
 	// By default, list only the authenticated user's requests
 	// Pass ?all=true for admins to see all (simple check — no role system yet)
+	search := r.URL.Query().Get("search")
+	page, limit := parsePagination(r)
+
 	var list []*models.ServiceRequest
 	var err error
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context())
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")

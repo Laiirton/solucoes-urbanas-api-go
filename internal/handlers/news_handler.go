@@ -92,17 +92,19 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NewsHandler) ListNews(w http.ResponseWriter, r *http.Request) {
-	newsList, err := h.repo.ListNews(r.Context())
+	search := r.URL.Query().Get("search")
+	page, limit := parsePagination(r)
+
+	newsList, err := h.repo.ListNews(r.Context(), search, page, limit)
 	if err != nil {
-		http.Error(w, "Failed to list news", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "failed to list news")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if newsList == nil {
 		newsList = []*models.News{}
 	}
-	json.NewEncoder(w).Encode(newsList)
+	respondJSON(w, http.StatusOK, newsList)
 }
 
 func (h *NewsHandler) GetNews(w http.ResponseWriter, r *http.Request) {

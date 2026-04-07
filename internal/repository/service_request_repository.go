@@ -85,20 +85,41 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context) ([]*models.ServiceRequest, error) {
-	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
-	                 request_data, attachments, status, created_at, updated_at
-	          FROM service_requests ORDER BY id DESC`
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search string, page, limit int) ([]*models.ServiceRequest, error) {
+	offset := (page - 1) * limit
+	query := `SELECT sr.id, sr.user_id, sr.service_id, sr.protocol_number, sr.service_title, sr.category,
+	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id`
 
-	return r.scanServiceRequests(ctx, query)
+	var args []interface{}
+	if search != "" {
+		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR u.full_name ILIKE $1)`
+		args = append(args, "%"+search+"%")
+	}
+
+	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	return r.scanServiceRequests(ctx, query, args...)
 }
 
-func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search string, page, limit int) ([]*models.ServiceRequest, error) {
+	offset := (page - 1) * limit
 	query := `SELECT id, user_id, service_id, protocol_number, service_title, category,
 	                 request_data, attachments, status, created_at, updated_at
-	          FROM service_requests WHERE user_id = $1 ORDER BY id DESC`
+	          FROM service_requests WHERE user_id = $1`
 
-	return r.scanServiceRequests(ctx, query, userID)
+	args := []interface{}{userID}
+	if search != "" {
+		query += ` AND (CAST(id AS TEXT) ILIKE $2 OR service_title ILIKE $2)`
+		args = append(args, "%"+search+"%")
+	}
+
+	query += fmt.Sprintf(` ORDER BY id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	return r.scanServiceRequests(ctx, query, args...)
 }
 
 func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, query string, args ...interface{}) ([]*models.ServiceRequest, error) {

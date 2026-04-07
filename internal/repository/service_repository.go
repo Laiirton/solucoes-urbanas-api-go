@@ -60,15 +60,31 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 	return svc, nil
 }
 
-func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool) ([]*models.Service, error) {
+func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int) ([]*models.Service, error) {
+	offset := (page - 1) * limit
 	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
               FROM services`
+
+	var args []interface{}
+	whereApplied := false
 	if onlyActive {
 		query += ` WHERE is_active = TRUE`
+		whereApplied = true
 	}
-	query += ` ORDER BY id ASC`
 
-	rows, err := r.db.Query(ctx, query)
+	if search != "" {
+		if whereApplied {
+			query += ` AND (title ILIKE $1 OR category ILIKE $1)`
+		} else {
+			query += ` WHERE title ILIKE $1 OR category ILIKE $1`
+		}
+		args = append(args, "%"+search+"%")
+	}
+
+	query += fmt.Sprintf(` ORDER BY id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list services: %w", err)
 	}

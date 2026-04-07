@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -30,9 +31,20 @@ func (r *NewsRepository) CreateNews(ctx context.Context, n *models.News) (*model
 	return n, nil
 }
 
-func (r *NewsRepository) ListNews(ctx context.Context) ([]*models.News, error) {
-	query := `SELECT id, title, content, image_urls, author_id, created_at, updated_at FROM news ORDER BY created_at DESC`
-	rows, err := r.db.Query(ctx, query)
+func (r *NewsRepository) ListNews(ctx context.Context, search string, page, limit int) ([]*models.News, error) {
+	offset := (page - 1) * limit
+	query := `SELECT id, title, content, image_urls, author_id, created_at, updated_at FROM news`
+
+	var args []interface{}
+	if search != "" {
+		query += ` WHERE title ILIKE $1 OR content ILIKE $1`
+		args = append(args, "%"+search+"%")
+	}
+
+	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

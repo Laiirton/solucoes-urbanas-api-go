@@ -82,11 +82,21 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	return user, nil
 }
 
-func (r *UserRepository) ListUsers(ctx context.Context) ([]*models.User, error) {
+func (r *UserRepository) ListUsers(ctx context.Context, search string, page, limit int) ([]*models.User, error) {
+	offset := (page - 1) * limit
 	query := `SELECT id, username, email, full_name, cpf, birth_date, type, created_at, updated_at
-              FROM users ORDER BY id ASC`
+              FROM users`
 
-	rows, err := r.db.Query(ctx, query)
+	var args []interface{}
+	if search != "" {
+		query += ` WHERE username ILIKE $1 OR full_name ILIKE $1 OR email ILIKE $1`
+		args = append(args, "%"+search+"%")
+	}
+
+	query += fmt.Sprintf(` ORDER BY id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}

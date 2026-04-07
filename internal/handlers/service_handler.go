@@ -21,7 +21,10 @@ func NewServiceHandler(serviceRepo *repository.ServiceRepository) *ServiceHandle
 // GET /services
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
-	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive)
+	search := r.URL.Query().Get("search")
+	page, limit := parsePagination(r)
+
+	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list services")
 		return
@@ -96,3 +99,4 @@ func (h *ServiceHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service deleted successfully"})
 }
+
