@@ -52,19 +52,29 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
-	// Generate random protocol number: SR-YYYYMMDD + random 4 digits (e.g. SR-202603242048)
-	randomNum, _ := rand.Int(rand.Reader, big.NewInt(10000))
-	protocol := fmt.Sprintf("SR-%s%04d", time.Now().Format("20060102"), randomNum.Int64())
+	// Generate a unique 8-digit random protocol number
+	// We use a retry loop to handle potential collisions in the unique constraint
+	var finalProtocol string
+	var lastErr error
+	for i := 0; i < 5; i++ {
+		tempN, _ := rand.Int(rand.Reader, big.NewInt(100000000))
+		p := fmt.Sprintf("%08d", tempN.Int64())
 
-	_, err = r.db.Exec(ctx,
-		`UPDATE service_requests SET protocol_number = $1 WHERE id = $2`,
-		protocol, sr.ID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set protocol number: %w", err)
+		_, lastErr = r.db.Exec(ctx,
+			`UPDATE service_requests SET protocol_number = $1 WHERE id = $2`,
+			p, sr.ID,
+		)
+		if lastErr == nil {
+			finalProtocol = p
+			break
+		}
 	}
-	sr.ProtocolNumber = &protocol
 
+	if finalProtocol == "" {
+		return nil, fmt.Errorf("failed to set unique protocol number after retries: %w", lastErr)
+	}
+
+	sr.ProtocolNumber = &finalProtocol
 	return sr, nil
 }
 
