@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"net/mail"
+	"time"
+)
 
 type User struct {
 	ID        int64      `json:"id"`
@@ -21,8 +25,38 @@ type CreateUserRequest struct {
 	Email     string  `json:"email"`
 	FullName  *string `json:"full_name,omitempty"`
 	CPF       *string `json:"cpf,omitempty"`
-	BirthDate *string `json:"birth_date,omitempty"` // parsed as string "DD/MM/YYYY"
+	BirthDate *string `json:"birth_date,omitempty"` 
 	Type      *string `json:"type,omitempty"`
+}
+
+func (r *CreateUserRequest) Validate() error {
+	if r.Username == "" {
+		return fmt.Errorf("username is required")
+	}
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if r.Password == "" {
+		return fmt.Errorf("password is required")
+	}
+
+	if r.CPF == nil || *r.CPF == "" {
+		return fmt.Errorf("cpf is required")
+	}
+
+	if r.BirthDate == nil || *r.BirthDate == "" {
+		return fmt.Errorf("birth_date is required")
+	}
+
+	if _, err := mail.ParseAddress(r.Email); err != nil {
+		return fmt.Errorf("invalid email format")
+	}
+
+	if _, err := time.Parse("02/01/2006", *r.BirthDate); err != nil {
+		return fmt.Errorf("invalid birth_date format, expected DD/MM/YYYY")
+	}
+
+	return nil
 }
 
 type UpdateUserRequest struct {
