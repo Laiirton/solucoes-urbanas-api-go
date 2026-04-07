@@ -147,6 +147,12 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 	return list, nil
 }
 
+func (r *ServiceRequestRepository) CountServiceRequestsByUser(ctx context.Context, userID int64) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM service_requests WHERE user_id = $1`, userID).Scan(&count)
+	return count, err
+}
+
 func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Context, id int64, status string) (*models.ServiceRequest, error) {
 	validStatuses := map[string]bool{
 		"pending": true, "in_progress": true, "completed": true, "cancelled": true,

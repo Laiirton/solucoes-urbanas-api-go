@@ -11,10 +11,11 @@ import (
 
 type UserHandler struct {
 	userRepo *repository.UserRepository
+	srRepo   *repository.ServiceRequestRepository
 }
 
-func NewUserHandler(userRepo *repository.UserRepository) *UserHandler {
-	return &UserHandler{userRepo: userRepo}
+func NewUserHandler(userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository) *UserHandler {
+	return &UserHandler{userRepo: userRepo, srRepo: srRepo}
 }
 
 // GET /users
@@ -76,7 +77,21 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, user)
+	total, err := h.srRepo.CountServiceRequestsByUser(r.Context(), id)
+	if err != nil {
+		total = 0
+	}
+
+	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), id, "", 1, 10)
+	if err != nil {
+		requests = []*models.ServiceRequest{}
+	}
+
+	respondJSON(w, http.StatusOK, models.UserDetailResponse{
+		User:          *user,
+		TotalRequests: total,
+		Requests:      requests,
+	})
 }
 
 // GET /users/me
@@ -93,7 +108,21 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, user)
+	total, err := h.srRepo.CountServiceRequestsByUser(r.Context(), userID)
+	if err != nil {
+		total = 0
+	}
+
+	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), userID, "", 1, 10)
+	if err != nil {
+		requests = []*models.ServiceRequest{}
+	}
+
+	respondJSON(w, http.StatusOK, models.UserDetailResponse{
+		User:          *user,
+		TotalRequests: total,
+		Requests:      requests,
+	})
 }
 
 // PUT /users/{id}

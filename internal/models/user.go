@@ -77,6 +77,12 @@ type LoginResponse struct {
 	User  User   `json:"user"`
 }
 
+type UserDetailResponse struct {
+	User          User              `json:"user"`
+	TotalRequests int               `json:"total_requests"`
+	Requests      []*ServiceRequest `json:"requests"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
