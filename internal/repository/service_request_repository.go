@@ -205,14 +205,31 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	unresolved := counts["pending"] + counts["in_progress"] + counts["urgent"]
 
+	var totalUsers int
+	if isAdmin {
+		r.db.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&totalUsers)
+	}
+
+	var activeServices int
+	if isAdmin {
+		r.db.QueryRow(ctx, "SELECT COUNT(*) FROM services WHERE is_active = TRUE").Scan(&activeServices)
+	}
+
+	var completedToday int
+	// We count completed today based on updated_at if status is 'completed'
+	r.db.QueryRow(ctx, "SELECT COUNT(*) FROM service_requests WHERE status = 'completed' AND updated_at::date = CURRENT_DATE").Scan(&completedToday)
+
 	stats := models.HomeStats{
-		TotalRequests:      models.StatDetail{Total: total, Percent: 100},
-		PendingRequests:    models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
-		InProgressRequests: models.StatDetail{Total: counts["in_progress"], Percent: pct(counts["in_progress"], total)},
-		CompletedRequests:  models.StatDetail{Total: counts["completed"], Percent: pct(counts["completed"], total)},
-		CancelledRequests:  models.StatDetail{Total: counts["cancelled"], Percent: pct(counts["cancelled"], total)},
-		UrgentRequests:     models.StatDetail{Total: counts["urgent"], Percent: pct(counts["urgent"], total)},
-		UnresolvedRequests: models.StatDetail{Total: unresolved, Percent: pct(unresolved, total)},
+		TotalRequests:       models.StatDetail{Total: total, Percent: 100},
+		PendingRequests:     models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
+		InProgressRequests:  models.StatDetail{Total: counts["in_progress"], Percent: pct(counts["in_progress"], total)},
+		CompletedRequests:   models.StatDetail{Total: counts["completed"], Percent: pct(counts["completed"], total)},
+		CancelledRequests:   models.StatDetail{Total: counts["cancelled"], Percent: pct(counts["cancelled"], total)},
+		UrgentRequests:      models.StatDetail{Total: counts["urgent"], Percent: pct(counts["urgent"], total)},
+		UnresolvedRequests:  models.StatDetail{Total: unresolved, Percent: pct(unresolved, total)},
+		TotalUsers:          totalUsers,
+		TotalActiveServices: activeServices,
+		CompletedToday:      completedToday,
 	}
 
 	catQuery := fmt.Sprintf(`
@@ -238,6 +255,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		categories = append(categories, models.CategoryStat{
 			Category: cat,
 			Percent:  pct(count, total),
+			Count:    count,
 		})
 	}
 	if categories == nil {
@@ -283,9 +301,36 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		recent = []models.RecentRequest{}
 	}
 
+	// Volume for the last 7 days
+	var volume7d []models.VolumeStat
+	volQuery := `
+		SELECT date_trunc('day', created_at) as day, COUNT(*) 
+		FROM service_requests 
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' 
+		GROUP BY day 
+		ORDER BY day ASC`
+	vRows, err := r.db.Query(ctx, volQuery)
+	if err == nil {
+		defer vRows.Close()
+		for vRows.Next() {
+			var day time.Time
+			var count int
+			if err := vRows.Scan(&day, &count); err == nil {
+				volume7d = append(volume7d, models.VolumeStat{
+					Day:   day.Format("2006-01-02"),
+					Count: count,
+				})
+			}
+		}
+	}
+	if volume7d == nil {
+		volume7d = []models.VolumeStat{}
+	}
+
 	return &models.HomeResponse{
 		Stats:          stats,
 		Categories:     categories,
 		RecentRequests: recent,
+		Volume7d:       volume7d,
 	}, nil
 }

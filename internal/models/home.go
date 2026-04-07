@@ -13,11 +13,20 @@ type HomeStats struct {
 	CancelledRequests  StatDetail `json:"cancelled_requests"`
 	UrgentRequests     StatDetail `json:"urgent_requests"`
 	UnresolvedRequests StatDetail `json:"unresolved_requests"`
+	TotalUsers          int        `json:"total_users"`
+	TotalActiveServices int        `json:"total_active_services"`
+	CompletedToday      int        `json:"completed_today"`
 }
 
 type CategoryStat struct {
 	Category string `json:"category"`
 	Percent  int    `json:"percent"`
+	Count    int    `json:"count"`
+}
+
+type VolumeStat struct {
+	Day   string `json:"day"`
+	Count int    `json:"count"`
 }
 
 type RecentRequest struct {
@@ -33,4 +42,5 @@ type HomeResponse struct {
 	Stats          HomeStats       `json:"stats"`
 	Categories     []CategoryStat  `json:"categories"`
 	RecentRequests []RecentRequest `json:"recent_requests"`
+	Volume7d       []VolumeStat    `json:"volume_7d"`
 }
