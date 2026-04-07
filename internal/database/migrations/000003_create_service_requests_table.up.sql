@@ -9,6 +9,7 @@ $$;
 CREATE TABLE IF NOT EXISTS service_requests (
     id              BIGSERIAL PRIMARY KEY,
     user_id         BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    service_id      BIGINT NOT NULL REFERENCES services(id) ON DELETE RESTRICT,
     protocol_number TEXT UNIQUE,
     service_title   TEXT NOT NULL,
     category        TEXT NOT NULL,
