@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -108,7 +109,16 @@ func (h *ServiceHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.serviceRepo.DeleteService(r.Context(), id); err != nil {
-		respondError(w, http.StatusNotFound, "service not found")
+		if strings.Contains(err.Error(), "service not found") {
+			respondError(w, http.StatusNotFound, "service not found")
+			return
+		}
+		// Probably a foreign key constraint (if service_requests exist)
+		if strings.Contains(err.Error(), "violates foreign key constraint") {
+			respondError(w, http.StatusConflict, "cannot delete service because it has associated service requests. try deactivating it instead.")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "failed to delete service: "+err.Error())
 		return
 	}
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service deleted successfully"})

@@ -133,13 +133,26 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 }
 
 func (r *ServiceRepository) DeleteService(ctx context.Context, id int64) error {
-	query := `DELETE FROM services WHERE id = $1`
-	result, err := r.db.Exec(ctx, query, id)
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Update service_requests to set service_id to NULL so we can delete the service
+	_, err = tx.Exec(ctx, `UPDATE service_requests SET service_id = NULL WHERE service_id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to clear service requests references: %w", err)
+	}
+
+	// Now delete the service
+	result, err := tx.Exec(ctx, `DELETE FROM services WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete service: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("service not found")
 	}
-	return nil
+
+	return tx.Commit(ctx)
 }
