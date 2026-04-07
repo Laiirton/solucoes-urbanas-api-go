@@ -12,10 +12,11 @@ import (
 
 type ServiceHandler struct {
 	serviceRepo *repository.ServiceRepository
+	srRepo      *repository.ServiceRequestRepository
 }
 
-func NewServiceHandler(serviceRepo *repository.ServiceRepository) *ServiceHandler {
-	return &ServiceHandler{serviceRepo: serviceRepo}
+func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository) *ServiceHandler {
+	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo}
 }
 
 // GET /services
@@ -44,7 +45,20 @@ func (h *ServiceHandler) GetService(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "service not found")
 		return
 	}
-	respondJSON(w, http.StatusOK, svc)
+
+	// Fetch metrics
+	stats, _ := h.srRepo.GetServiceStatusStats(r.Context(), id)
+	avgTime, _ := h.srRepo.GetAverageServiceTime(r.Context(), id)
+	recent, _ := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
+
+	resp := models.ServiceDetailResponse{
+		Service:            svc,
+		AverageServiceTime: avgTime,
+		StatusStats:        stats,
+		RecentRequests:     recent,
+	}
+
+	respondJSON(w, http.StatusOK, resp)
 }
 
 // POST /services

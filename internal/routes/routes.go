@@ -39,7 +39,7 @@ func Setup(
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo, srRepo)
-	serviceHandler := handlers.NewServiceHandler(serviceRepo)
+	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo)
 	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, storageService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)

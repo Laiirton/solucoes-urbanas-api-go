@@ -16,6 +16,18 @@ type Service struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+type StatusStat struct {
+	Status string `json:"status"`
+	Total  int    `json:"total"`
+}
+
+type ServiceDetailResponse struct {
+	*Service
+	AverageServiceTime int                             `json:"average_service_time"`
+	StatusStats        []StatusStat                    `json:"status_stats"`
+	RecentRequests     []*ServiceRequestDetailResponse `json:"recent_requests"`
+}
+
 type CreateServiceRequest struct {
 	Title       string          `json:"title"`
 	Description *string         `json:"description,omitempty"`

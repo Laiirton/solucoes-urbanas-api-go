@@ -214,6 +214,97 @@ func (r *ServiceRequestRepository) DeleteServiceRequest(ctx context.Context, id 
 	return nil
 }
 
+func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx context.Context, serviceID int64, page, limit int) ([]*models.ServiceRequestDetailResponse, error) {
+	offset := (page - 1) * limit
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
+	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at,
+	                 u.username, u.email, u.cpf, u.birth_date, u.type, u.created_at, u.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          WHERE sr.service_id = $1
+	          ORDER BY sr.created_at DESC
+	          LIMIT $2 OFFSET $3`
+
+	rows, err := r.db.Query(ctx, query, serviceID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*models.ServiceRequestDetailResponse
+	for rows.Next() {
+		sr := &models.ServiceRequest{}
+		user := &models.User{}
+		var uID *int64
+		if err := rows.Scan(
+			&sr.ID, &uID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
+			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
+			&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+			&user.Username, &user.Email, &user.CPF, &user.BirthDate, &user.Type, &user.CreatedAt, &user.UpdatedAt,
+		); err != nil {
+			// If user is null, partial scan might fail or return zero values.
+			// However, since we joined with u.id it should be fine if there is a user.
+			// If u.id is null, those fields will be null/zero.
+			return nil, err
+		}
+		sr.UserID = uID
+		if uID != nil {
+			user.ID = *uID
+			user.FullName = &sr.UserName
+			list = append(list, &models.ServiceRequestDetailResponse{
+				ServiceRequest: sr,
+				CreatedBy:      user,
+			})
+		} else {
+			list = append(list, &models.ServiceRequestDetailResponse{
+				ServiceRequest: sr,
+			})
+		}
+	}
+	if list == nil {
+		list = []*models.ServiceRequestDetailResponse{}
+	}
+	return list, nil
+}
+
+func (r *ServiceRequestRepository) GetServiceStatusStats(ctx context.Context, serviceID int64) ([]models.StatusStat, error) {
+	query := `SELECT status, COUNT(*) FROM service_requests WHERE service_id = $1 GROUP BY status`
+	rows, err := r.db.Query(ctx, query, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.StatusStat
+	for rows.Next() {
+		var s models.StatusStat
+		if err := rows.Scan(&s.Status, &s.Total); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	if stats == nil {
+		stats = []models.StatusStat{}
+	}
+	return stats, nil
+}
+
+func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, serviceID int64) (int, error) {
+	queryAvg := `
+		SELECT 
+			COALESCE(ROUND(EXTRACT(EPOCH FROM AVG(updated_at - created_at)) / 86400)::int, 0)
+		FROM service_requests
+		WHERE service_id = $1 AND status = 'completed'`
+
+	var result int
+	err := r.db.QueryRow(ctx, queryAvg, serviceID).Scan(&result)
+	if err != nil {
+		return 0, nil
+	}
+
+	return result, nil
+}
+
 func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64) (*models.HomeResponse, error) {
 	baseWhere := ""
 	var args []interface{}
