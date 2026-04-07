@@ -141,7 +141,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userRepo.UpdateUser(r.Context(), id, &req)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "user not found or update failed")
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

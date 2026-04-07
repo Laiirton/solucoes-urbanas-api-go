@@ -132,28 +132,36 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 
 func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.UpdateUserRequest) (*models.User, error) {
 	var birthDate *time.Time
-	if req.BirthDate != nil {
-		parsed, err := time.Parse("2006-01-02", *req.BirthDate)
+	if req.BirthDate != nil && *req.BirthDate != "" {
+		// Try DD/MM/YYYY first (standard in Brazil)
+		parsed, err := time.Parse("02/01/2006", *req.BirthDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid birth_date format, expected YYYY-MM-DD: %w", err)
+			// Fallback to YYYY-MM-DD
+			parsed2, err2 := time.Parse("2006-01-02", *req.BirthDate)
+			if err2 != nil {
+				return nil, fmt.Errorf("invalid birth_date format, expected DD/MM/YYYY or YYYY-MM-DD: %w", err)
+			}
+			birthDate = &parsed2
+		} else {
+			birthDate = &parsed
 		}
-		birthDate = &parsed
 	}
 
 	query := `
 		UPDATE users SET
 			username   = COALESCE($1, username),
-			full_name  = COALESCE($2, full_name),
-			cpf        = COALESCE($3, cpf),
-			birth_date = COALESCE($4, birth_date),
-			type       = COALESCE($5, type),
+			email      = COALESCE($2, email),
+			full_name  = COALESCE($3, full_name),
+			cpf        = COALESCE($4, cpf),
+			birth_date = COALESCE($5, birth_date),
+			type       = COALESCE($6, type),
 			updated_at = NOW()
-		WHERE id = $6
+		WHERE id = $7
 		RETURNING id, username, email, full_name, cpf, birth_date, type, created_at, updated_at`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query,
-		req.Username, req.FullName, req.CPF, birthDate, req.Type, id,
+		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,

@@ -61,6 +61,7 @@ func (r *CreateUserRequest) Validate() error {
 
 type UpdateUserRequest struct {
 	Username  *string `json:"username,omitempty"`
+	Email     *string `json:"email,omitempty"`
 	FullName  *string `json:"full_name,omitempty"`
 	CPF       *string `json:"cpf,omitempty"`
 	BirthDate *string `json:"birth_date,omitempty"`
