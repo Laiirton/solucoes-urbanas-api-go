@@ -172,6 +172,38 @@ func (r *ServiceRequestRepository) CountServiceRequestsByUser(ctx context.Contex
 	return count, err
 }
 
+func (r *ServiceRequestRepository) CountServiceRequestsByStatusByUser(ctx context.Context, userID int64) (map[string]int, error) {
+	query := `
+		SELECT status, COUNT(*) 
+		FROM service_requests 
+		WHERE user_id = $1
+		GROUP BY status`
+
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := map[string]int{
+		"pending":     0,
+		"in_progress": 0,
+		"completed":   0,
+		"cancelled":   0,
+	}
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		counts[status] = count
+	}
+
+	return counts, nil
+}
+
 func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Context, id int64, status string) (*models.ServiceRequest, error) {
 	validStatuses := map[string]bool{
 		"pending": true, "in_progress": true, "completed": true, "cancelled": true,

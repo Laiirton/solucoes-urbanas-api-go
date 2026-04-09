@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
@@ -87,10 +88,16 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		requests = []*models.ServiceRequest{}
 	}
 
+	summary, err := h.srRepo.CountServiceRequestsByStatusByUser(r.Context(), id)
+	if err != nil {
+		summary = map[string]int{}
+	}
+
 	respondJSON(w, http.StatusOK, models.UserDetailResponse{
-		User:          *user,
-		TotalRequests: total,
-		Requests:      requests,
+		User:           *user,
+		TotalRequests:  total,
+		Requests:       requests,
+		RequestSummary: summary,
 	})
 }
 
@@ -118,10 +125,16 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		requests = []*models.ServiceRequest{}
 	}
 
+	summary, err := h.srRepo.CountServiceRequestsByStatusByUser(r.Context(), userID)
+	if err != nil {
+		summary = map[string]int{}
+	}
+
 	respondJSON(w, http.StatusOK, models.UserDetailResponse{
-		User:          *user,
-		TotalRequests: total,
-		Requests:      requests,
+		User:           *user,
+		TotalRequests:  total,
+		Requests:       requests,
+		RequestSummary: summary,
 	})
 }
 

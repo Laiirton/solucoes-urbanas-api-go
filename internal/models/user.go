@@ -81,7 +81,8 @@ type LoginResponse struct {
 type UserDetailResponse struct {
 	User          User              `json:"user"`
 	TotalRequests int               `json:"total_requests"`
-	Requests      []*ServiceRequest `json:"requests"`
+	Requests       []*ServiceRequest `json:"requests"`
+	RequestSummary map[string]int    `json:"request_summary"`
 }
 
 type ErrorResponse struct {
