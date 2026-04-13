@@ -398,6 +398,24 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
 	r.db.QueryRow(ctx, completedTodayQuery, args...).Scan(&completedToday)
 
+	var createdToday int
+	createdTodayQuery := fmt.Sprintf(`
+		SELECT COUNT(*) 
+		FROM service_requests sr
+		%s
+		%s created_at::date = CURRENT_DATE
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	r.db.QueryRow(ctx, createdTodayQuery, args...).Scan(&createdToday)
+
+	var avgTime float64
+	avgTimeQuery := fmt.Sprintf(`
+		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0)
+		FROM service_requests sr
+		%s
+		%s status = 'completed'
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	r.db.QueryRow(ctx, avgTimeQuery, args...).Scan(&avgTime)
+
 	stats := models.HomeStats{
 		TotalRequests:       models.StatDetail{Total: total, Percent: 100},
 		PendingRequests:     models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
@@ -409,6 +427,48 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		TotalUsers:          totalUsers,
 		TotalActiveServices: activeServices,
 		CompletedToday:      completedToday,
+		CreatedToday:        createdToday,
+		AverageTime:         avgTime,
+	}
+
+	// Calculate Alerts
+	var alerts []models.HomeAlert
+	
+	// 1. Stagnant requests (> 3 days)
+	var stagnantCount int
+	stagnantQuery := fmt.Sprintf(`
+		SELECT COUNT(*) 
+		FROM service_requests sr
+		%s
+		%s status IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	r.db.QueryRow(ctx, stagnantQuery, args...).Scan(&stagnantCount)
+	
+	if stagnantCount > 0 {
+		alerts = append(alerts, models.HomeAlert{
+			Type:    "danger",
+			Message: fmt.Sprintf("%d solicitações paradas há mais de 3 dias", stagnantCount),
+		})
+	}
+
+	// 2. Most critical service (most pending/urgent)
+	var criticalService string
+	criticalQuery := fmt.Sprintf(`
+		SELECT service_title
+		FROM service_requests sr
+		%s
+		%s status IN ('pending', 'urgent')
+		GROUP BY service_title
+		ORDER BY COUNT(*) DESC
+		LIMIT 1
+	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	r.db.QueryRow(ctx, criticalQuery, args...).Scan(&criticalService)
+
+	if criticalService != "" {
+		alerts = append(alerts, models.HomeAlert{
+			Type:    "warning",
+			Message: fmt.Sprintf("Serviço mais crítico: %s", criticalService),
+		})
 	}
 
 	catQuery := fmt.Sprintf(`
@@ -437,10 +497,70 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 			Count:    count,
 		})
 	}
+
+	// Ensure standard categories are present for the dashboard cards
+	standardCategories := []string{
+		"Limpeza Urbana", "Saúde", "Educação", "Iluminação Pública",
+		"Transporte Urbano", "Segurança Pública", "Esporte e Lazer", "Cultura",
+		"Tributação", "Assistência Social", "Vias Urbanas", "Arborização e Meio Ambiente",
+		"Agricultura", "Vigilância Sanitária", "Animais",
+	}
+
+	for _, sc := range standardCategories {
+		found := false
+		for _, c := range categories {
+			if c.Category == sc {
+				found = true
+				break
+			}
+		}
+		if !found {
+			categories = append(categories, models.CategoryStat{
+				Category: sc,
+				Percent:  0,
+				Count:    0,
+			})
+		}
+	}
+
 	if categories == nil {
 		categories = []models.CategoryStat{}
 	}
 
+	fetchRecent := func(query string, args ...interface{}) ([]models.RecentRequest, error) {
+		rows, err := r.db.Query(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var list []models.RecentRequest
+		for rows.Next() {
+			var req models.RecentRequest
+			var rawData []byte
+			var createdAt time.Time
+			if err := rows.Scan(&req.ID, &req.Name, &req.Service, &rawData, &req.Status, &createdAt); err != nil {
+				return nil, err
+			}
+			req.Date = createdAt.Format("2006-01-02")
+
+			var data map[string]interface{}
+			if err := json.Unmarshal(rawData, &data); err == nil {
+				if addr, ok := data["address"].(string); ok {
+					req.Address = &addr
+				} else if end, ok := data["endereco"].(string); ok {
+					req.Address = &end
+				}
+			}
+			list = append(list, req)
+		}
+		if list == nil {
+			list = []models.RecentRequest{}
+		}
+		return list, nil
+	}
+
+	// 1. All Recent (as before)
 	recentQuery := fmt.Sprintf(`
 		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
 		FROM service_requests sr
@@ -448,37 +568,29 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		%s
 		ORDER BY sr.created_at DESC
 		LIMIT 10`, baseWhere)
+	recent, _ := fetchRecent(recentQuery, args...)
 
-	recentRows, err := r.db.Query(ctx, recentQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get recent requests: %w", err)
-	}
-	defer recentRows.Close()
+	// 2. Delayed (> 3 days)
+	delayedQuery := fmt.Sprintf(`
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		FROM service_requests sr
+		LEFT JOIN users u ON sr.user_id = u.id
+		%s
+		%s sr.status IN ('pending', 'in_progress') AND sr.created_at < NOW() - INTERVAL '3 days'
+		ORDER BY sr.created_at ASC
+		LIMIT 10`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	delayed, _ := fetchRecent(delayedQuery, args...)
 
-	var recent []models.RecentRequest
-	for recentRows.Next() {
-		var req models.RecentRequest
-		var rawData []byte
-		var createdAt time.Time
-		if err := recentRows.Scan(&req.ID, &req.Name, &req.Service, &rawData, &req.Status, &createdAt); err != nil {
-			return nil, err
-		}
-		req.Date = createdAt.Format("2006-01-02")
-
-		var data map[string]interface{}
-		if err := json.Unmarshal(rawData, &data); err == nil {
-			if addr, ok := data["address"].(string); ok {
-				req.Address = &addr
-			} else if end, ok := data["endereco"].(string); ok {
-				req.Address = &end
-			}
-		}
-
-		recent = append(recent, req)
-	}
-	if recent == nil {
-		recent = []models.RecentRequest{}
-	}
+	// 3. New (last 24h)
+	newQuery := fmt.Sprintf(`
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		FROM service_requests sr
+		LEFT JOIN users u ON sr.user_id = u.id
+		%s
+		%s sr.created_at >= NOW() - INTERVAL '24 hours'
+		ORDER BY sr.created_at DESC
+		LIMIT 10`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
+	newReqs, _ := fetchRecent(newQuery, args...)
 
 	// Volume for the last 7 days
 	var volume7d []models.VolumeStat
@@ -509,9 +621,12 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	return &models.HomeResponse{
-		Stats:          stats,
-		Categories:     categories,
-		RecentRequests: recent,
-		Volume7d:       volume7d,
+		Stats:            stats,
+		Categories:       categories,
+		RecentRequests:   recent,
+		DelayedRequests:  delayed,
+		NewRequests:      newReqs,
+		Volume7d:         volume7d,
+		Alerts:           alerts,
 	}, nil
 }

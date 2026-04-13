@@ -6,16 +6,23 @@ type StatDetail struct {
 }
 
 type HomeStats struct {
-	TotalRequests      StatDetail `json:"total_requests"`
-	PendingRequests    StatDetail `json:"pending_requests"`
-	InProgressRequests StatDetail `json:"in_progress_requests"`
-	CompletedRequests  StatDetail `json:"completed_requests"`
-	CancelledRequests  StatDetail `json:"cancelled_requests"`
-	UrgentRequests     StatDetail `json:"urgent_requests"`
-	UnresolvedRequests StatDetail `json:"unresolved_requests"`
+	TotalRequests       StatDetail `json:"total_requests"`
+	PendingRequests     StatDetail `json:"pending_requests"`
+	InProgressRequests  StatDetail `json:"in_progress_requests"`
+	CompletedRequests   StatDetail `json:"completed_requests"`
+	CancelledRequests   StatDetail `json:"cancelled_requests"`
+	UrgentRequests      StatDetail `json:"urgent_requests"`
+	UnresolvedRequests  StatDetail `json:"unresolved_requests"`
 	TotalUsers          int        `json:"total_users"`
 	TotalActiveServices int        `json:"total_active_services"`
 	CompletedToday      int        `json:"completed_today"`
+	CreatedToday        int        `json:"created_today"`
+	AverageTime         float64    `json:"average_time"` // in days
+}
+
+type HomeAlert struct {
+	Type    string `json:"type"`    // e.g., "danger", "warning", "info"
+	Message string `json:"message"`
 }
 
 type CategoryStat struct {
@@ -39,8 +46,11 @@ type RecentRequest struct {
 }
 
 type HomeResponse struct {
-	Stats          HomeStats       `json:"stats"`
-	Categories     []CategoryStat  `json:"categories"`
-	RecentRequests []RecentRequest `json:"recent_requests"`
-	Volume7d       []VolumeStat    `json:"volume_7d"`
+	Stats            HomeStats       `json:"stats"`
+	Categories       []CategoryStat  `json:"categories"`
+	RecentRequests   []RecentRequest `json:"recent_requests"`
+	DelayedRequests  []RecentRequest `json:"delayed_requests"`
+	NewRequests      []RecentRequest `json:"new_requests"`
+	Volume7d         []VolumeStat    `json:"volume_7d"`
+	Alerts           []HomeAlert     `json:"alerts"`
 }
