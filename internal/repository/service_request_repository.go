@@ -432,17 +432,16 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	// Calculate Alerts
-	var alerts []models.HomeAlert
+	alerts := []models.HomeAlert{}
 	
-	// 1. Stagnant requests (> 3 days)
+	// 1. Stagnant requests (> 3 days) - GLOBAL
 	var stagnantCount int
-	stagnantQuery := fmt.Sprintf(`
+	stagnantQuery := `
 		SELECT COUNT(*) 
-		FROM service_requests sr
-		%s
-		%s status IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
-	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
-	r.db.QueryRow(ctx, stagnantQuery, args...).Scan(&stagnantCount)
+		FROM service_requests
+		WHERE status IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
+	`
+	r.db.QueryRow(ctx, stagnantQuery).Scan(&stagnantCount)
 	
 	if stagnantCount > 0 {
 		alerts = append(alerts, models.HomeAlert{
@@ -451,23 +450,23 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		})
 	}
 
-	// 2. Most critical service (most pending/urgent)
+	// 2. Most critical service - GLOBAL (Only if > 5 pending/urgent)
 	var criticalService string
-	criticalQuery := fmt.Sprintf(`
-		SELECT service_title
-		FROM service_requests sr
-		%s
-		%s status IN ('pending', 'urgent')
+	var criticalCount int
+	criticalQuery := `
+		SELECT service_title, COUNT(*)
+		FROM service_requests
+		WHERE status IN ('pending', 'urgent')
 		GROUP BY service_title
 		ORDER BY COUNT(*) DESC
 		LIMIT 1
-	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
-	r.db.QueryRow(ctx, criticalQuery, args...).Scan(&criticalService)
+	`
+	r.db.QueryRow(ctx, criticalQuery).Scan(&criticalService, &criticalCount)
 
-	if criticalService != "" {
+	if criticalService != "" && criticalCount > 5 {
 		alerts = append(alerts, models.HomeAlert{
 			Type:    "warning",
-			Message: fmt.Sprintf("Serviço mais crítico: %s", criticalService),
+			Message: fmt.Sprintf("Serviço mais crítico: %s com %d pendências", criticalService, criticalCount),
 		})
 	}
 
