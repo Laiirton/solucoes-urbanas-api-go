@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
@@ -16,13 +14,13 @@ import (
 )
 
 type ServiceRequestHandler struct {
-	srRepo         *repository.ServiceRequestRepository
-	userRepo       *repository.UserRepository
-	storageService services.StorageService
+	srRepo        *repository.ServiceRequestRepository
+	userRepo      *repository.UserRepository
+	uploadService *services.UploadService
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, storageService services.StorageService) *ServiceRequestHandler {
-	return &ServiceRequestHandler{srRepo: srRepo, userRepo: userRepo, storageService: storageService}
+func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, uploadService *services.UploadService) *ServiceRequestHandler {
+	return &ServiceRequestHandler{srRepo: srRepo, userRepo: userRepo, uploadService: uploadService}
 }
 
 // POST /service-requests
@@ -37,7 +35,7 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(contentType, "multipart/form-data") {
-		if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB limit
+		if err := r.ParseMultipartForm(services.MaxTotalFilesSizeBytes); err != nil {
 			respondError(w, http.StatusBadRequest, "failed to parse multipart form")
 			return
 		}
@@ -58,32 +56,12 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 			req.RequestData = []byte("{}")
 		}
 
-		// Handle file uploads
+		// Handle file uploads using the UploadService
 		files := r.MultipartForm.File["files"]
-		var attachmentURLs []string
-
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				respondError(w, http.StatusInternalServerError, "failed to open uploaded file")
-				return
-			}
-			defer file.Close()
-
-			// Create a folder path using the userID: "userID/timestamp_filename"
-			filename := fmt.Sprintf("%d/%d_%s", userID, time.Now().UnixNano(), fileHeader.Filename)
-
-			fileContentType := fileHeader.Header.Get("Content-Type")
-			if fileContentType == "" {
-				fileContentType = "application/octet-stream"
-			}
-
-			publicURL, err := h.storageService.UploadFile(file, filename, fileContentType)
-			if err != nil {
-				respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to upload file %s: %v", fileHeader.Filename, err))
-				return
-			}
-			attachmentURLs = append(attachmentURLs, publicURL)
+		attachmentURLs, err := h.uploadService.UploadServiceRequestFiles(userID, files)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
 		}
 
 		if len(attachmentURLs) > 0 {
@@ -108,6 +86,10 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 
 	sr, err := h.srRepo.CreateServiceRequest(r.Context(), &userID, &req)
 	if err != nil {
+		// Rollback uploaded files if DB insert fails
+		if urls := services.ParseAttachmentURLs(req.Attachments); len(urls) > 0 {
+			h.uploadService.RollbackFiles(urls)
+		}
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -122,8 +104,6 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// By default, list only the authenticated user's requests
-	// Pass ?all=true for admins to see all (simple check — no role system yet)
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
@@ -205,9 +185,23 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 		respondError(w, http.StatusBadRequest, "invalid service request id")
 		return
 	}
+
+	// Fetch the service request first to get attachments for cleanup
+	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
 	if err := h.srRepo.DeleteServiceRequest(r.Context(), id); err != nil {
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
+
+	// Delete attachment files from storage after successful DB deletion
+	if urls := services.ParseAttachmentURLs(sr.Attachments); len(urls) > 0 {
+		h.uploadService.RollbackFiles(urls)
+	}
+
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service request deleted successfully"})
 }

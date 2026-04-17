@@ -71,11 +71,13 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 		// Usar o service de storage injetado
 		if h.storage != nil {
 			imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
+			file.Close()
 			if uploadErr == nil {
 				imageURLs = append(imageURLs, imageURL)
 			}
+		} else {
+			file.Close()
 		}
-		file.Close()
 	}
 
 	n.ImageURLs = imageURLs
@@ -177,11 +179,13 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 
 			if h.storage != nil {
 				imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
+				file.Close()
 				if uploadErr == nil {
 					imageURLs = append(imageURLs, imageURL)
 				}
+			} else {
+				file.Close()
 			}
-			file.Close()
 		}
 		n.ImageURLs = imageURLs
 	} else {
