@@ -7,9 +7,8 @@ ALTER TABLE news ADD COLUMN IF NOT EXISTS category VARCHAR;
 ALTER TABLE news ADD COLUMN IF NOT EXISTS tags TEXT[];
 
 -- Convert content to JSONB if it's not already
--- Note: This assumes existing content can be represented as JSON strings or is empty
--- If there is existing data, we might need a more complex conversion, but for a dev environment this is usually fine.
-ALTER TABLE news ALTER COLUMN content TYPE JSONB USING content::jsonb;
+-- Using to_jsonb(content) safely converts existing plain text into a valid JSON string
+ALTER TABLE news ALTER COLUMN content TYPE JSONB USING to_jsonb(content);
 
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_news_slug ON news(slug);
