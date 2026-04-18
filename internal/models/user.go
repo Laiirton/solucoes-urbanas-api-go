@@ -15,6 +15,8 @@ type User struct {
 	CPF       *string    `json:"cpf,omitempty"`
 	BirthDate *time.Time `json:"birth_date,omitempty"`
 	Type      *string    `json:"type,omitempty"`
+	TeamID    *int64     `json:"team_id,omitempty"`
+	Team      *Team      `json:"team,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 }
@@ -27,6 +29,7 @@ type CreateUserRequest struct {
 	CPF       *string `json:"cpf,omitempty"`
 	BirthDate *string `json:"birth_date,omitempty"`
 	Type      *string `json:"type,omitempty"`
+	TeamID    *int64  `json:"team_id,omitempty"`
 }
 
 func (r *CreateUserRequest) Validate() error {
@@ -66,6 +69,7 @@ type UpdateUserRequest struct {
 	CPF       *string `json:"cpf,omitempty"`
 	BirthDate *string `json:"birth_date,omitempty"`
 	Type      *string `json:"type,omitempty"`
+	TeamID    *int64  `json:"team_id,omitempty"`
 }
 
 type LoginRequest struct {

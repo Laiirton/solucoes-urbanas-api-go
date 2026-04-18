@@ -19,6 +19,7 @@ func Setup(
 	serviceRepo *repository.ServiceRepository,
 	srRepo *repository.ServiceRequestRepository,
 	newsRepo *repository.NewsRepository,
+	teamRepo *repository.TeamRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -45,6 +46,7 @@ func Setup(
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
 	newsHandler := handlers.NewNewsHandler(newsRepo, storageService)
+	teamHandler := handlers.NewTeamHandler(teamRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -100,6 +102,13 @@ func Setup(
 			r.Post("/news/upload-image", newsHandler.UploadImage)
 			r.Put("/news/{id}", newsHandler.UpdateNews)
 			r.Delete("/news/{id}", newsHandler.DeleteNews)
+
+			// Teams
+			r.Get("/teams", teamHandler.ListTeams)
+			r.Post("/teams", teamHandler.CreateTeam)
+			r.Get("/teams/{id}", teamHandler.GetTeam)
+			r.Put("/teams/{id}", teamHandler.UpdateTeam)
+			r.Delete("/teams/{id}", teamHandler.DeleteTeam)
 
 			// Service Requests
 			r.Post("/service-requests", srHandler.CreateServiceRequest)

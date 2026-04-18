@@ -107,12 +107,17 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
+	var categoryFilter string
+	user, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err == nil && user.Type != nil && *user.Type == "admin" && user.Team != nil {
+		categoryFilter = user.Team.ServiceCategory
+	}
+
 	var list []*models.ServiceRequest
-	var err error
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, categoryFilter, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, page, limit)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, categoryFilter, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")

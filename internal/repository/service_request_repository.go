@@ -102,7 +102,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
 	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
@@ -110,9 +110,21 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	          LEFT JOIN users u ON sr.user_id = u.id`
 
 	var args []interface{}
+	whereApplied := false
+
 	if search != "" {
 		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR sr.category ILIKE $1 OR u.full_name ILIKE $1)`
 		args = append(args, "%"+search+"%")
+		whereApplied = true
+	}
+
+	if categoryFilter != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
+		} else {
+			query += ` WHERE sr.category = $1`
+		}
+		args = append(args, categoryFilter)
 	}
 
 	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
@@ -121,7 +133,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	return r.scanServiceRequests(ctx, query, args...)
 }
 
-func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
 	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
@@ -131,11 +143,16 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 
 	args := []interface{}{userID}
 	if search != "" {
-		query += ` AND (CAST(id AS TEXT) ILIKE $2 OR service_title ILIKE $2 OR category ILIKE $2)`
+		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
+	
+	if categoryFilter != "" {
+		query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
+		args = append(args, categoryFilter)
+	}
 
-	query += fmt.Sprintf(` ORDER BY id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
 
 	return r.scanServiceRequests(ctx, query, args...)
@@ -337,13 +354,16 @@ func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, se
 	return result, nil
 }
 
-func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64) (*models.HomeResponse, error) {
+func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, categoryFilter string) (*models.HomeResponse, error) {
 	baseWhere := ""
 	var args []interface{}
 
 	if !isAdmin {
 		baseWhere = "WHERE sr.user_id = $1"
 		args = append(args, userID)
+	} else if categoryFilter != "" {
+		baseWhere = "WHERE sr.category = $1"
+		args = append(args, categoryFilter)
 	}
 
 	statsQuery := fmt.Sprintf(`

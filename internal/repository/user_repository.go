@@ -19,9 +19,9 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error) {
 	query := `
-		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, username, email, full_name, cpf, birth_date, type, created_at, updated_at`
+		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, team_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, created_at, updated_at`
 
 	var birthDate *time.Time
 	if req.BirthDate != nil {
@@ -36,10 +36,12 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	err := r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
 		req.FullName, req.CPF, birthDate, req.Type,
+		req.TeamID,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.CreatedAt, &user.UpdatedAt,
+		&user.Type, &user.TeamID,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -49,14 +51,15 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 }
 
 func (r *UserRepository) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
-	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, created_at, updated_at
+	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, team_id, created_at, updated_at
               FROM users WHERE username = $1`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query, username).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.CreatedAt, &user.UpdatedAt,
+		&user.Type, &user.TeamID,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -66,17 +69,39 @@ func (r *UserRepository) GetUserByUsername(ctx context.Context, username string)
 }
 
 func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
-	query := `SELECT id, username, email, full_name, cpf, birth_date, type, created_at, updated_at
-              FROM users WHERE id = $1`
+	query := `
+		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.created_at, u.updated_at,
+		       t.id, t.name, t.service_category, t.description, t.created_at, t.updated_at
+		FROM users u
+		LEFT JOIN teams t ON u.team_id = t.id
+		WHERE u.id = $1`
 
 	user := &models.User{}
+	var tID *int64
+	var tName, tCat *string
+	var tDesc *string
+	var tCreatedAt, tUpdatedAt *time.Time
+
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.CreatedAt, &user.UpdatedAt,
+		&user.Type, &user.TeamID,
+		&user.CreatedAt, &user.UpdatedAt,
+		&tID, &tName, &tCat, &tDesc, &tCreatedAt, &tUpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	if tID != nil {
+		user.Team = &models.Team{
+			ID:              *tID,
+			Name:            *tName,
+			ServiceCategory: *tCat,
+			Description:     tDesc,
+			CreatedAt:       *tCreatedAt,
+			UpdatedAt:       *tUpdatedAt,
+		}
 	}
 
 	return user, nil
@@ -84,7 +109,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
 	offset := (page - 1) * limit
-	query := `SELECT id, username, email, full_name, cpf, birth_date, type, created_at, updated_at
+	query := `SELECT id, username, email, full_name, cpf, birth_date, type, team_id, created_at, updated_at
               FROM users`
 
 	var args []interface{}
@@ -120,7 +145,8 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
 			&user.FullName, &user.CPF, &user.BirthDate,
-			&user.Type, &user.CreatedAt, &user.UpdatedAt,
+			&user.Type, &user.TeamID,
+			&user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
@@ -155,17 +181,19 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 			cpf        = COALESCE($4, cpf),
 			birth_date = COALESCE($5, birth_date),
 			type       = COALESCE($6, type),
+			team_id    = COALESCE($7, team_id),
 			updated_at = NOW()
-		WHERE id = $7
-		RETURNING id, username, email, full_name, cpf, birth_date, type, created_at, updated_at`
+		WHERE id = $8
+		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, created_at, updated_at`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query,
-		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, id,
+		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.CreatedAt, &user.UpdatedAt,
+		&user.Type, &user.TeamID,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)

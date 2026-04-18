@@ -34,8 +34,12 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isAdmin := user.Type != nil && *user.Type == "admin"
+	var categoryFilter string
+	if isAdmin && user.Team != nil {
+		categoryFilter = user.Team.ServiceCategory
+	}
 
-	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID)
+	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, categoryFilter)
 	if err != nil {
 		http.Error(w, "Error computing home stats", http.StatusInternalServerError)
 		return
