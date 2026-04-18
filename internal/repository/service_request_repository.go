@@ -458,6 +458,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		CompletedToday:      completedToday,
 		CreatedToday:        createdToday,
 		AverageTime:         avgTime,
+		PopularServices:     topServices,
 	}
 
 	// Calculate Alerts
@@ -656,5 +657,6 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		NewRequests:      newReqs,
 		Volume7d:         volume7d,
 		Alerts:           alerts,
+		PopularServices:  topServices,
 	}, nil
 }

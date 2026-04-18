@@ -53,6 +53,7 @@ type PopularService struct {
 	RequestCount int    `json:"request_count"`
 }
 
+
 type HomeResponse struct {
 	Stats            HomeStats       `json:"stats"`
 	Categories       []CategoryStat  `json:"categories"`
