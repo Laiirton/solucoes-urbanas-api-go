@@ -193,6 +193,26 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(news)
 }
 
+func extractSupabaseURLs(content []byte, imageURLs []string) []string {
+	var urls []string
+	urls = append(urls, imageURLs...)
+
+	re := regexp.MustCompile(`https?://[^\s"'\\]+/storage/v1/object/public/[^\s"'\\]+`)
+	matches := re.FindAllString(string(content), -1)
+	urls = append(urls, matches...)
+
+	uniqueUrls := make(map[string]bool)
+	var result []string
+	for _, u := range urls {
+		u = strings.ReplaceAll(u, "\\/", "/")
+		if !uniqueUrls[u] {
+			uniqueUrls[u] = true
+			result = append(result, u)
+		}
+	}
+	return result
+}
+
 func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -201,9 +221,22 @@ func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	n, err := h.repo.GetNews(r.Context(), id)
+	if err != nil {
+		http.Error(w, "News not found", http.StatusNotFound)
+		return
+	}
+
 	if err := h.repo.DeleteNews(r.Context(), id); err != nil {
 		http.Error(w, "Failed to delete news", http.StatusInternalServerError)
 		return
+	}
+
+	if h.storage != nil {
+		urls := extractSupabaseURLs(n.Content, n.ImageURLs)
+		for _, u := range urls {
+			_ = h.storage.DeleteFile(u)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
