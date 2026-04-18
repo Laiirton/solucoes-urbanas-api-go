@@ -97,6 +97,7 @@ func Setup(
 
 			// News (write)
 			r.Post("/news", newsHandler.CreateNews)
+			r.Post("/news/upload-image", newsHandler.UploadImage)
 			r.Put("/news/{id}", newsHandler.UpdateNews)
 			r.Delete("/news/{id}", newsHandler.DeleteNews)
 

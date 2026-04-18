@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -23,26 +27,83 @@ func NewNewsHandler(repo *repository.NewsRepository, storage services.StorageSer
 	return &NewsHandler{repo: repo, storage: storage}
 }
 
-func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
-	// Parse multi-part form
-	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
+func generateSlug(title string) string {
+	slug := strings.ToLower(title)
+	slug = regexp.MustCompile(`[^a-z0-9\s-]`).ReplaceAllString(slug, "")
+	slug = regexp.MustCompile(`\s+`).ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if len(slug) > 100 {
+		slug = slug[:100]
+	}
+	return slug
+}
+
+func (h *NewsHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
 	}
 
-	title := r.FormValue("title")
-	content := r.FormValue("content")
+	file, fileHeader, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Image is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
 
-	if title == "" || content == "" {
-		http.Error(w, "Title and content are required", http.StatusBadRequest)
+	var currentUserID int64
+	if userID := r.Context().Value(middleware.UserIDKey); userID != nil {
+		if id, ok := userID.(int64); ok {
+			currentUserID = id
+		} else if id, ok := userID.(float64); ok {
+			currentUserID = int64(id)
+		}
+	}
+
+	ext := filepath.Ext(fileHeader.Filename)
+	userIdStr := strconv.FormatInt(currentUserID, 10)
+	filename := "news_content/" + userIdStr + "/" + uuid.New().String() + ext
+
+	if h.storage == nil {
+		http.Error(w, "Storage service not configured", http.StatusInternalServerError)
 		return
 	}
 
-	var n models.News
-	n.Title = title
-	n.Content = content
+	imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
+	if uploadErr != nil {
+		http.Error(w, "Failed to upload image", http.StatusInternalServerError)
+		return
+	}
 
-	// Tenta capturar o User ID do contexto (se autenticado)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"url": imageURL})
+}
+
+func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
+	var n models.News
+	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if n.Title == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+
+	if n.Slug == "" {
+		n.Slug = generateSlug(n.Title)
+	}
+
+	if n.Status == "" {
+		n.Status = "draft"
+	}
+
+	if n.Status == "published" && n.PublishedAt == nil {
+		now := time.Now()
+		n.PublishedAt = &now
+	}
+
 	var currentUserID int64
 	if userID := r.Context().Value(middleware.UserIDKey); userID != nil {
 		if id, ok := userID.(int64); ok {
@@ -54,37 +115,9 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Handle optional multiple images upload
-	var imageURLs []string
-	files := r.MultipartForm.File["images"] // Use "images" para suportar multiplos uploads
-
-	for _, fileHeader := range files {
-		file, err := fileHeader.Open()
-		if err != nil {
-			continue // Pula o arquivo se houver erro ao abrir
-		}
-
-		ext := filepath.Ext(fileHeader.Filename)
-		userIdStr := strconv.FormatInt(currentUserID, 10)
-		filename := "news_images/" + userIdStr + "/" + uuid.New().String() + ext
-
-		// Usar o service de storage injetado
-		if h.storage != nil {
-			imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
-			file.Close()
-			if uploadErr == nil {
-				imageURLs = append(imageURLs, imageURL)
-			}
-		} else {
-			file.Close()
-		}
-	}
-
-	n.ImageURLs = imageURLs
-
 	news, err := h.repo.CreateNews(r.Context(), &n)
 	if err != nil {
-		http.Error(w, "Failed to create news", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to create news: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -95,9 +128,10 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 
 func (h *NewsHandler) ListNews(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
+	status := r.URL.Query().Get("status")
 	page, limit := parsePagination(r)
 
-	newsList, err := h.repo.ListNews(r.Context(), search, page, limit)
+	newsList, err := h.repo.ListNews(r.Context(), search, status, page, limit)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list news")
 		return
@@ -110,14 +144,17 @@ func (h *NewsHandler) ListNews(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NewsHandler) GetNews(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+	idOrSlug := chi.URLParam(r, "id")
+	
+	var n *models.News
+	var err error
+
+	if id, parseErr := strconv.ParseInt(idOrSlug, 10, 64); parseErr == nil {
+		n, err = h.repo.GetNews(r.Context(), id)
+	} else {
+		n, err = h.repo.GetNewsBySlug(r.Context(), idOrSlug)
 	}
 
-	n, err := h.repo.GetNews(r.Context(), id)
 	if err != nil {
 		http.Error(w, "News not found", http.StatusNotFound)
 		return
@@ -135,65 +172,15 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Unable to parse form", http.StatusBadRequest)
-		return
-	}
-
-	title := r.FormValue("title")
-	content := r.FormValue("content")
-
-	if title == "" || content == "" {
-		http.Error(w, "Title and content are required", http.StatusBadRequest)
-		return
-	}
-
 	var n models.News
-	n.Title = title
-	n.Content = content
-
-	// Tenta capturar o User ID do contexto
-	var currentUserID int64
-	if userID := r.Context().Value(middleware.UserIDKey); userID != nil {
-		if idVal, ok := userID.(int64); ok {
-			currentUserID = idVal
-		} else if idVal, ok := userID.(float64); ok {
-			currentUserID = int64(idVal)
-		}
+	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
 	}
 
-	// Handle optional multiple images upload
-	var imageURLs []string
-	files := r.MultipartForm.File["images"]
-
-	if len(files) > 0 {
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				continue
-			}
-
-			ext := filepath.Ext(fileHeader.Filename)
-			userIdStr := strconv.FormatInt(currentUserID, 10)
-			filename := "news_images/" + userIdStr + "/" + uuid.New().String() + ext
-
-			if h.storage != nil {
-				imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
-				file.Close()
-				if uploadErr == nil {
-					imageURLs = append(imageURLs, imageURL)
-				}
-			} else {
-				file.Close()
-			}
-		}
-		n.ImageURLs = imageURLs
-	} else {
-		// Keep the existing image urls if no new images were uploaded
-		existingNews, getErr := h.repo.GetNews(r.Context(), id)
-		if getErr == nil {
-			n.ImageURLs = existingNews.ImageURLs
-		}
+	if n.Status == "published" && n.PublishedAt == nil {
+		now := time.Now()
+		n.PublishedAt = &now
 	}
 
 	news, err := h.repo.UpdateNews(r.Context(), id, &n)
