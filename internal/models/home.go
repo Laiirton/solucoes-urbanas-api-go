@@ -18,6 +18,7 @@ type HomeStats struct {
 	CompletedToday      int        `json:"completed_today"`
 	CreatedToday        int        `json:"created_today"`
 	AverageTime         float64    `json:"average_time"` // in days
+	PopularServices     []PopularService `json:"popular_services"`
 }
 
 type HomeAlert struct {
@@ -45,6 +46,13 @@ type RecentRequest struct {
 	Date    string  `json:"date"`
 }
 
+type PopularService struct {
+	ID           int64  `json:"id"`
+	Title        string `json:"title"`
+	Category     string `json:"category"`
+	RequestCount int    `json:"request_count"`
+}
+
 type HomeResponse struct {
 	Stats            HomeStats       `json:"stats"`
 	Categories       []CategoryStat  `json:"categories"`
@@ -53,4 +61,5 @@ type HomeResponse struct {
 	NewRequests      []RecentRequest `json:"new_requests"`
 	Volume7d         []VolumeStat    `json:"volume_7d"`
 	Alerts           []HomeAlert     `json:"alerts"`
+	PopularServices  []PopularService `json:"popular_services"`
 }

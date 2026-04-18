@@ -416,6 +416,35 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
 	r.db.QueryRow(ctx, avgTimeQuery, args...).Scan(&avgTime)
 
+	// Get top 5 most requested services
+	var topServices []models.PopularService
+	topQuery := `
+		SELECT s.id, s.title, s.category, COUNT(sr.id) as request_count
+		FROM services s
+		INNER JOIN service_requests sr ON s.id = sr.service_id
+		WHERE sr.status != 'cancelled'
+		GROUP BY s.id, s.title, s.category
+		ORDER BY request_count DESC
+		LIMIT 5
+	`
+	topRows, err := r.db.Query(ctx, topQuery)
+	if err != nil {
+		fmt.Printf("Warning: failed to fetch popular services: %v\n", err)
+	} else {
+		defer topRows.Close()
+		for topRows.Next() {
+			svc := models.PopularService{}
+			if err := topRows.Scan(&svc.ID, &svc.Title, &svc.Category, &svc.RequestCount); err != nil {
+				fmt.Printf("Warning: failed to scan popular service: %v\n", err)
+				continue
+			}
+			topServices = append(topServices, svc)
+		}
+	}
+	if topServices == nil {
+		topServices = []models.PopularService{}
+	}
+
 	stats := models.HomeStats{
 		TotalRequests:       models.StatDetail{Total: total, Percent: 100},
 		PendingRequests:     models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
