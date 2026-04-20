@@ -39,7 +39,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 - `GET /api/news`
   - Lista todas as notícias.
 - `GET /api/news/{id}`
-  - Retorna uma notícia específica pelo `id`.
+  - Retorna uma notícia específica pelo `id` ou `slug`.
 
 ## Serviços públicos
 
@@ -98,15 +98,64 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `POST /api/news`
   - Cria uma notícia.
+  - Payload JSON:
+    ```json
+    {
+      "title": "Título da notícia",
+      "slug": "slug-da-noticia",
+      "summary": "Resumo da notícia",
+      "content": "Conteúdo formatado",
+      "image_urls": ["https://exemplo.com/imagem1.jpg"],
+      "status": "published",
+      "category": "Categoria",
+      "tags": ["tag1", "tag2"]
+    }
+    ```
+- `POST /api/news/upload-image`
+  - Faz upload de uma imagem para notícia.
   - Aceita `multipart/form-data`:
-    - `title`: (string) Título da notícia.
-    - `content`: (string) Conteúdo formatado.
-    - `files`: (file) Um ou mais arquivos de imagem.
+    - `image`: (file) Arquivo de imagem.
 - `PUT /api/news/{id}`
   - Atualiza notícia existente por `id`.
-  - Aceita `multipart/form-data` similar ao POST.
+  - Payload JSON (campos opcionais):
+    ```json
+    {
+      "title": "Novo título",
+      "content": "Novo conteúdo",
+      "status": "published"
+    }
+    ```
 - `DELETE /api/news/{id}`
   - Exclui notícia por `id`.
+
+## Equipes (Teams)
+
+- `GET /api/teams`
+  - Lista todas as equipes.
+- `POST /api/teams`
+  - Cria uma nova equipe.
+  - Payload JSON:
+    ```json
+    {
+      "name": "Nome da Equipe",
+      "service_category": "Categoria de Serviço",
+      "description": "Descrição da equipe"
+    }
+    ```
+- `GET /api/teams/{id}`
+  - Retorna dados de uma equipe específica pelo `id`.
+- `PUT /api/teams/{id}`
+  - Atualiza equipe por `id`.
+  - Payload JSON (campos opcionais):
+    ```json
+    {
+      "name": "Novo Nome",
+      "service_category": "Nova Categoria",
+      "description": "Nova descrição"
+    }
+    ```
+- `DELETE /api/teams/{id}`
+  - Exclui equipe por `id`.
 
 ## Serviços (escrita)
 
