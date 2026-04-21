@@ -57,6 +57,11 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *userID).Scan(&sr.UserName)
 	}
 
+	// Set icon based on service ID
+	if req.ServiceID != nil {
+		sr.Icon = models.GetServiceIcon(*req.ServiceID)
+	}
+
 	// Generate a unique 8-digit random protocol number
 	// We use a retry loop to handle potential collisions in the unique constraint
 	var finalProtocol string
@@ -99,6 +104,12 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	if err != nil {
 		return nil, fmt.Errorf("service request not found: %w", err)
 	}
+
+	// Set icon based on service ID
+	if sr.ServiceID != nil {
+		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+	}
+
 	return sr, nil
 }
 
@@ -146,7 +157,7 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
-	
+
 	if categoryFilter != "" {
 		query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
 		args = append(args, categoryFilter)
@@ -175,6 +186,12 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service request: %w", err)
 		}
+
+		// Set icon based on service ID
+		if sr.ServiceID != nil {
+			sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+		}
+
 		list = append(list, sr)
 	}
 	if list == nil {
@@ -249,6 +266,12 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 	if sr.UserID != nil {
 		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *sr.UserID).Scan(&sr.UserName)
 	}
+
+	// Set icon based on service ID
+	if sr.ServiceID != nil {
+		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+	}
+
 	return sr, nil
 }
 
@@ -297,6 +320,12 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 			return nil, err
 		}
 		sr.UserID = uID
+
+		// Set icon based on service ID
+		if sr.ServiceID != nil {
+			sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+		}
+
 		if uID != nil {
 			user.ID = *uID
 			user.FullName = &sr.UserName
@@ -483,7 +512,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	// Calculate Alerts
 	alerts := []models.HomeAlert{}
-	
+
 	// 1. Stagnant requests (> 3 days) - GLOBAL
 	var stagnantCount int
 	stagnantQuery := `
@@ -492,7 +521,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		WHERE status IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
 	`
 	r.db.QueryRow(ctx, stagnantQuery).Scan(&stagnantCount)
-	
+
 	if stagnantCount > 0 {
 		alerts = append(alerts, models.HomeAlert{
 			Type:    "danger",
@@ -670,13 +699,13 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	return &models.HomeResponse{
-		Stats:            stats,
-		Categories:       categories,
-		RecentRequests:   recent,
-		DelayedRequests:  delayed,
-		NewRequests:      newReqs,
-		Volume7d:         volume7d,
-		Alerts:           alerts,
-		PopularServices:  topServices,
+		Stats:           stats,
+		Categories:      categories,
+		RecentRequests:  recent,
+		DelayedRequests: delayed,
+		NewRequests:     newReqs,
+		Volume7d:        volume7d,
+		Alerts:          alerts,
+		PopularServices: topServices,
 	}, nil
 }

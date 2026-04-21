@@ -13,6 +13,7 @@ type ServiceRequest struct {
 	ProtocolNumber *string         `json:"protocol_number,omitempty"`
 	ServiceTitle   string          `json:"service_title"`
 	Category       string          `json:"category"`
+	Icon           string          `json:"icon,omitempty"`
 	RequestData    json.RawMessage `json:"request_data"`
 	Attachments    json.RawMessage `json:"attachments,omitempty"`
 	Status         string          `json:"status"`
@@ -22,8 +23,8 @@ type ServiceRequest struct {
 
 type ServiceRequestDetailResponse struct {
 	*ServiceRequest
-	CreatedBy     *User `json:"created_by,omitempty"`
-	UserRequests  int    `json:"user_requests_count"`
+	CreatedBy    *User `json:"created_by,omitempty"`
+	UserRequests int   `json:"user_requests_count"`
 }
 
 // CreateServiceRequestRequest — category is populated automatically from services.category
