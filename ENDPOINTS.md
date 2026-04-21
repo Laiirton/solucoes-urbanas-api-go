@@ -2,6 +2,18 @@
 
 ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.com/api/
 
+## Health Check
+
+- `GET /health`
+  - Endpoint para verificar se a API está funcionando.
+  - Resposta JSON:
+    ```json
+    {
+      "status": "ok",
+      "timestamp": "2026-04-21T18:00:00Z"
+    }
+    ```
+
 ## Autenticação pública
 
 - `POST /api/auth/register`
@@ -38,6 +50,11 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `GET /api/news`
   - Lista todas as notícias.
+  - Parâmetros de query (opcionais):
+    - `search`: busca por título, slug ou conteúdo
+    - `status`: filtra por status (draft, published)
+    - `page`: número da página (padrão: 1)
+    - `limit`: itens por página (padrão: 10)
 - `GET /api/news/{id}`
   - Retorna uma notícia específica pelo `id` ou `slug`.
 
@@ -45,8 +62,17 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `GET /api/services`
   - Lista todos os serviços ativos por padrão.
+  - Parâmetros de query (opcionais):
+    - `all`: quando `true`, lista todos os serviços (incluindo inativos)
+    - `search`: busca por texto
+    - `page`: número da página (padrão: 1)
+    - `limit`: itens por página (padrão: 10)
 - `GET /api/services/{id}`
   - Retorna detalhes de um serviço específico pelo `id`.
+  - Inclui estatísticas adicionais:
+    - `average_service_time`: tempo médio de atendimento (em dias)
+    - `status_stats`: estatísticas por status dos pedidos
+    - `recent_requests`: últimos 5 pedidos relacionados ao serviço
 
 ## Rotas protegidas (JWT obrigatório)
 
@@ -60,6 +86,11 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `GET /api/users`
   - Lista todos os usuários.
+  - Parâmetros de query (opcionais):
+    - `search`: busca por ID, username, nome completo, email, tipo ou CPF
+    - `type`: filtra por tipo de usuário (user, admin)
+    - `page`: número da página (padrão: 1)
+    - `limit`: itens por página (padrão: 10)
 - `POST /api/users`
   - Cria um novo usuário (administrativo).
   - Payload JSON:
@@ -72,6 +103,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       "cpf": "123.456.789-00",
       "birth_date": "01/01/1990",
       "type": "user",
+      "team_id": 1,
       "profile_image_url": "https://.../foto.jpg"  // opcional
     }
     ```
@@ -85,10 +117,12 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     ```json
     {
       "username": "novo_nick",
+      "email": "novo@email.com",
       "full_name": "Novo Nome Completo",
       "cpf": "111.222.333-44",
       "birth_date": "10/05/1995",
       "type": "admin",
+      "team_id": 2,
       "profile_image_url": "https://.../nova-foto.jpg"
     }
     ```
@@ -118,6 +152,11 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 - `POST /api/news`
   - Cria uma notícia.
+  - Campos automáticos:
+    - `author_id`: preenchido automaticamente com o ID do usuário autenticado
+    - `slug`: gerado automaticamente a partir do título se não fornecido
+    - `status`: padrão é "draft" se não fornecido
+    - `published_at`: definido automaticamente quando status é "published"
   - Payload JSON:
     ```json
     {
@@ -137,6 +176,8 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     - `image`: (file) Arquivo de imagem.
 - `PUT /api/news/{id}`
   - Atualiza notícia existente por `id`.
+  - Campo automático:
+    - `published_at`: definido automaticamente quando status muda para "published"
   - Payload JSON (campos opcionais):
     ```json
     {
@@ -216,18 +257,26 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
   - Payload JSON:
     ```json
     {
+      "service_id": 1,
       "service_title": "Buraco na via",
-      "category": "Infraestrutura",
       "request_data": {
         "address": "Av. Brasil, 450",
         "description": "Fisura no asfalto"
       }
     }
     ```
-  - Também aceita `multipart/form-data` para anexos (`files`).
+  - Também aceita `multipart/form-data` para anexos:
+    - `service_id`: (number) ID do serviço
+    - `service_title`: (string) Título do serviço
+    - `request_data`: (string) JSON string com dados do formulário
+    - `files`: (file[]) Arquivos de anexo
 - `GET /api/service-requests`
   - Lista pedidos de serviço do usuário autenticado.
-  - Use `?all=true` para listar todos os pedidos (modo administrativo simples).
+  - Parâmetros de query (opcionais):
+    - `search`: busca por texto
+    - `all`: quando `true`, lista todos os pedidos (modo administrativo)
+    - `page`: número da página (padrão: 1)
+    - `limit`: itens por página (padrão: 10)
 - `GET /api/service-requests/{id}`
   - Retorna um pedido de serviço específico pelo `id`.
 - `PATCH /api/service-requests/{id}/status`
