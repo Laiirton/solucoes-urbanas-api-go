@@ -32,10 +32,18 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     ```
 - `POST /api/auth/login`
   - Faz login do usuário.
+  - Aceita username ou email no campo `username`.
   - Payload JSON:
     ```json
     {
       "username": "usuario123",
+      "password": "senha_forte"
+    }
+    ```
+  - Exemplo com email:
+    ```json
+    {
+      "username": "user@exemplo.com",
       "password": "senha_forte"
     }
     ```

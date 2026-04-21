@@ -63,11 +63,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "username and password are required")
+		respondError(w, http.StatusBadRequest, "username or email and password are required")
 		return
 	}
 
-	user, err := h.userRepo.GetUserByUsername(r.Context(), req.Username)
+	user, err := h.userRepo.GetUserByUsernameOrEmail(r.Context(), req.Username)
 	if err != nil {
 		respondError(w, http.StatusUnauthorized, "user not found")
 		return
@@ -96,7 +96,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) generateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp": time.Now().Add(30 * 24 * time.Hour).Unix(),
+		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(),
 		"iat":     time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

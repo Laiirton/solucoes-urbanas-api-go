@@ -50,12 +50,12 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	return user, nil
 }
 
-func (r *UserRepository) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
+func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
 	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at
- FROM users WHERE username = $1`
+ FROM users WHERE username = $1 OR email = $1`
 
 	user := &models.User{}
-	err := r.db.QueryRow(ctx, query, username).Scan(
+	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
 		&user.Type, &user.TeamID, &user.ProfileImageURL,
@@ -95,12 +95,12 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 	if tID != nil {
 		user.Team = &models.Team{
-			ID: *tID,
-			Name: *tName,
+			ID:              *tID,
+			Name:            *tName,
 			ServiceCategory: *tCat,
-			Description: tDesc,
-			CreatedAt: *tCreatedAt,
-			UpdatedAt: *tUpdatedAt,
+			Description:     tDesc,
+			CreatedAt:       *tCreatedAt,
+			UpdatedAt:       *tUpdatedAt,
 		}
 	}
 
