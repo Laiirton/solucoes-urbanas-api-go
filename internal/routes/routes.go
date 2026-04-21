@@ -39,7 +39,7 @@ func Setup(
 	}))
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
-	userHandler := handlers.NewUserHandler(userRepo, srRepo)
+	userHandler := handlers.NewUserHandler(userRepo, srRepo, storageService)
 	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo)
 	uploadService := services.NewUploadService(storageService)
 	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, uploadService)
@@ -84,13 +84,15 @@ func Setup(
 			// Home
 			r.Get("/home", homeHandler.Index)
 
-			// Users
-			r.Get("/users", userHandler.ListUsers)
-			r.Post("/users", userHandler.CreateUser)
-			r.Get("/users/me", userHandler.GetMe)
-			r.Get("/users/{id}", userHandler.GetUser)
-			r.Put("/users/{id}", userHandler.UpdateUser)
-			r.Delete("/users/{id}", userHandler.DeleteUser)
+		// Users
+		r.Get("/users", userHandler.ListUsers)
+		r.Post("/users", userHandler.CreateUser)
+		r.Get("/users/me", userHandler.GetMe)
+		r.Get("/users/{id}", userHandler.GetUser)
+		r.Put("/users/{id}", userHandler.UpdateUser)
+		r.Delete("/users/{id}", userHandler.DeleteUser)
+		r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
+		r.Delete("/users/{id}/profile-image", userHandler.DeleteProfileImage)
 
 			// Services (write)
 			r.Post("/services", serviceHandler.CreateService)

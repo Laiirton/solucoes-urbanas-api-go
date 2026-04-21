@@ -67,11 +67,12 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     {
       "username": "usuario123",
       "email": "user@exemplo.com",
-      "password": "senha_forte",
+      "password": "***",
       "full_name": "Nome Completo",
       "cpf": "123.456.789-00",
       "birth_date": "01/01/1990",
-      "type": "user"
+      "type": "user",
+      "profile_image_url": "https://.../foto.jpg"  // opcional
     }
     ```
 - `GET /api/users/me`
@@ -87,11 +88,30 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       "full_name": "Novo Nome Completo",
       "cpf": "111.222.333-44",
       "birth_date": "10/05/1995",
-      "type": "admin"
+      "type": "admin",
+      "profile_image_url": "https://.../nova-foto.jpg"
     }
     ```
 - `DELETE /api/users/{id}`
   - Exclui usuário por `id`.
+- `POST /api/users/{id}/profile-image`
+  - Faz upload de imagem de perfil para o usuário.
+  - Aceita `multipart/form-data`:
+    - `image`: (file) Arquivo de imagem (jpg, jpeg, png, max 5MB).
+  - Resposta:
+    ```json
+    {
+      "url": "https://.../storage/v1/object/public/bucket/profile_images/123/uuid.jpg"
+    }
+    ```
+- `DELETE /api/users/{id}/profile-image`
+  - Remove a imagem de perfil do usuário.
+  - Resposta:
+    ```json
+    {
+      "message": "Profile image removed successfully"
+    }
+    ```
 
 
 ## Notícias (escrita)
