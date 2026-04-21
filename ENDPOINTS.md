@@ -165,6 +165,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     - `slug`: gerado automaticamente a partir do título se não fornecido
     - `status`: padrão é "draft" se não fornecido
     - `published_at`: definido automaticamente quando status é "published"
+  - Quando a notícia já nasce ou passa para `published`, a API envia push notifications para os usuários cadastrados.
   - Payload JSON:
     ```json
     {
@@ -186,6 +187,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
   - Atualiza notícia existente por `id`.
   - Campo automático:
     - `published_at`: definido automaticamente quando status muda para "published"
+  - Campos ausentes ficam inalterados.
   - Payload JSON (campos opcionais):
     ```json
     {
@@ -196,6 +198,19 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     ```
 - `DELETE /api/news/{id}`
   - Exclui notícia por `id`.
+
+## Notificações
+
+- `POST /api/notifications/push-tokens`
+  - Requer autenticação JWT.
+  - Registra ou atualiza o `ExponentPushToken[...]` do dispositivo do usuário autenticado.
+  - Payload JSON:
+    ```json
+    {
+      "token": "ExponentPushToken[...]"
+    }
+    ```
+  - Esse token é usado para receber notificações automáticas quando notícias forem publicadas.
 
 ## Equipes (Teams)
 

@@ -21,3 +21,14 @@ type News struct {
 	UpdatedAt   time.Time       `json:"updated_at" db:"updated_at"`
 }
 
+type UpdateNewsRequest struct {
+	Title       *string          `json:"title,omitempty"`
+	Slug        *string          `json:"slug,omitempty"`
+	Summary     *string          `json:"summary,omitempty"`
+	Content     *json.RawMessage `json:"content,omitempty"`
+	ImageURLs   *[]string        `json:"image_urls,omitempty"`
+	Status      *string          `json:"status,omitempty"`
+	Category    *string          `json:"category,omitempty"`
+	Tags        *[]string        `json:"tags,omitempty"`
+	PublishedAt *time.Time       `json:"published_at,omitempty"`
+}

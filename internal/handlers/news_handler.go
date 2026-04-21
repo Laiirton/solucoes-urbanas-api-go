@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -19,12 +21,19 @@ import (
 )
 
 type NewsHandler struct {
-	repo    *repository.NewsRepository
-	storage services.StorageService
+	repo          *repository.NewsRepository
+	pushTokenRepo *repository.PushTokenRepository
+	pushService   *services.ExpoPushService
+	storage       services.StorageService
 }
 
-func NewNewsHandler(repo *repository.NewsRepository, storage services.StorageService) *NewsHandler {
-	return &NewsHandler{repo: repo, storage: storage}
+func NewNewsHandler(repo *repository.NewsRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, storage services.StorageService) *NewsHandler {
+	return &NewsHandler{
+		repo:          repo,
+		pushTokenRepo: pushTokenRepo,
+		pushService:   pushService,
+		storage:       storage,
+	}
 }
 
 func generateSlug(title string) string {
@@ -121,6 +130,10 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if news.Status == "published" {
+		h.dispatchNewsPublished(news.ID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(news)
@@ -145,7 +158,7 @@ func (h *NewsHandler) ListNews(w http.ResponseWriter, r *http.Request) {
 
 func (h *NewsHandler) GetNews(w http.ResponseWriter, r *http.Request) {
 	idOrSlug := chi.URLParam(r, "id")
-	
+
 	var n *models.News
 	var err error
 
@@ -172,13 +185,25 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var n models.News
+	existing, err := h.repo.GetNews(r.Context(), id)
+	if err != nil {
+		http.Error(w, "News not found", http.StatusNotFound)
+		return
+	}
+
+	var n models.UpdateNewsRequest
 	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if n.Status == "published" && n.PublishedAt == nil {
+	if !hasNewsUpdateFields(&n) {
+		http.Error(w, "At least one field is required", http.StatusBadRequest)
+		return
+	}
+
+	shouldNotify := n.Status != nil && *n.Status == "published" && existing.Status != "published"
+	if shouldNotify && n.PublishedAt == nil {
 		now := time.Now()
 		n.PublishedAt = &now
 	}
@@ -187,6 +212,10 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to update news", http.StatusInternalServerError)
 		return
+	}
+
+	if shouldNotify {
+		h.dispatchNewsPublished(news.ID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -240,4 +269,41 @@ func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func hasNewsUpdateFields(req *models.UpdateNewsRequest) bool {
+	return req.Title != nil ||
+		req.Slug != nil ||
+		req.Summary != nil ||
+		req.Content != nil ||
+		req.ImageURLs != nil ||
+		req.Status != nil ||
+		req.Category != nil ||
+		req.Tags != nil ||
+		req.PublishedAt != nil
+}
+
+func (h *NewsHandler) dispatchNewsPublished(newsID int64) {
+	if h.pushTokenRepo == nil || h.pushService == nil {
+		return
+	}
+
+	go func(id int64) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		tokens, err := h.pushTokenRepo.ListTokens(ctx)
+		if err != nil {
+			log.Printf("warning: failed to list push tokens for news %d: %v", id, err)
+			return
+		}
+
+		if len(tokens) == 0 {
+			return
+		}
+
+		if err := h.pushService.SendNewsPublished(ctx, tokens, id); err != nil {
+			log.Printf("warning: failed to send news notification for news %d: %v", id, err)
+		}
+	}(newsID)
 }

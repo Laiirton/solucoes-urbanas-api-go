@@ -95,25 +95,52 @@ func (r *NewsRepository) GetNewsBySlug(ctx context.Context, slug string) (*model
 	return &n, nil
 }
 
-func (r *NewsRepository) UpdateNews(ctx context.Context, id int64, n *models.News) (*models.News, error) {
+func (r *NewsRepository) UpdateNews(ctx context.Context, id int64, n *models.UpdateNewsRequest) (*models.News, error) {
 	query := `
 		UPDATE news SET 
-			title = $1, slug = $2, summary = $3, content = $4, image_urls = $5, 
-			status = $6, category = $7, tags = $8, published_at = $9, updated_at = NOW()
+			title = COALESCE($1, title),
+			slug = COALESCE($2, slug),
+			summary = COALESCE($3, summary),
+			content = COALESCE($4, content),
+			image_urls = COALESCE($5, image_urls), 
+			status = COALESCE($6, status),
+			category = COALESCE($7, category),
+			tags = COALESCE($8, tags),
+			published_at = COALESCE($9, published_at),
+			updated_at = NOW()
 		WHERE id = $10
 		RETURNING id, title, slug, summary, content, image_urls, status, category, tags, author_id, published_at, created_at, updated_at
 	`
+
+	news := &models.News{}
 	err := r.db.QueryRow(ctx, query,
-		n.Title, n.Slug, n.Summary, n.Content, n.ImageURLs, n.Status, n.Category, n.Tags, n.PublishedAt, id).
-		Scan(&n.ID, &n.Title, &n.Slug, &n.Summary, &n.Content, &n.ImageURLs, &n.Status, &n.Category, &n.Tags, &n.AuthorID, &n.PublishedAt, &n.CreatedAt, &n.UpdatedAt)
+		nullableValue(n.Title),
+		nullableValue(n.Slug),
+		nullableValue(n.Summary),
+		nullableValue(n.Content),
+		nullableValue(n.ImageURLs),
+		nullableValue(n.Status),
+		nullableValue(n.Category),
+		nullableValue(n.Tags),
+		nullableValue(n.PublishedAt),
+		id,
+	).
+		Scan(&news.ID, &news.Title, &news.Slug, &news.Summary, &news.Content, &news.ImageURLs, &news.Status, &news.Category, &news.Tags, &news.AuthorID, &news.PublishedAt, &news.CreatedAt, &news.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	return n, nil
+	return news, nil
 }
 
 func (r *NewsRepository) DeleteNews(ctx context.Context, id int64) error {
 	query := `DELETE FROM news WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
 	return err
+}
+
+func nullableValue[T any](value *T) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }

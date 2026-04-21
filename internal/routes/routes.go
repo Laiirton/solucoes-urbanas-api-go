@@ -20,6 +20,7 @@ func Setup(
 	srRepo *repository.ServiceRequestRepository,
 	newsRepo *repository.NewsRepository,
 	teamRepo *repository.TeamRepository,
+	pushTokenRepo *repository.PushTokenRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -45,7 +46,9 @@ func Setup(
 	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, uploadService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
-	newsHandler := handlers.NewNewsHandler(newsRepo, storageService)
+	pushService := services.NewExpoPushService()
+	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, pushService, storageService)
+	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -84,15 +87,15 @@ func Setup(
 			// Home
 			r.Get("/home", homeHandler.Index)
 
-		// Users
-		r.Get("/users", userHandler.ListUsers)
-		r.Post("/users", userHandler.CreateUser)
-		r.Get("/users/me", userHandler.GetMe)
-		r.Get("/users/{id}", userHandler.GetUser)
-		r.Put("/users/{id}", userHandler.UpdateUser)
-		r.Delete("/users/{id}", userHandler.DeleteUser)
-		r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
-		r.Delete("/users/{id}/profile-image", userHandler.DeleteProfileImage)
+			// Users
+			r.Get("/users", userHandler.ListUsers)
+			r.Post("/users", userHandler.CreateUser)
+			r.Get("/users/me", userHandler.GetMe)
+			r.Get("/users/{id}", userHandler.GetUser)
+			r.Put("/users/{id}", userHandler.UpdateUser)
+			r.Delete("/users/{id}", userHandler.DeleteUser)
+			r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
+			r.Delete("/users/{id}/profile-image", userHandler.DeleteProfileImage)
 
 			// Services (write)
 			r.Post("/services", serviceHandler.CreateService)
@@ -104,6 +107,9 @@ func Setup(
 			r.Post("/news/upload-image", newsHandler.UploadImage)
 			r.Put("/news/{id}", newsHandler.UpdateNews)
 			r.Delete("/news/{id}", newsHandler.DeleteNews)
+
+			// Notifications
+			r.Post("/notifications/push-tokens", notificationHandler.RegisterPushToken)
 
 			// Teams
 			r.Get("/teams", teamHandler.ListTeams)
