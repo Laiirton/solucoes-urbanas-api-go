@@ -14,8 +14,6 @@ import (
 const (
 	expoPushEndpoint  = "https://exp.host/--/api/v2/push/send"
 	expoPushBatchSize = 100
-	newsPushTitle     = "Nova notícia"
-	newsPushBody      = "Clique para ver"
 )
 
 type ExpoPushMessage struct {
@@ -39,7 +37,7 @@ func NewExpoPushService() *ExpoPushService {
 	}
 }
 
-func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string, newsID int64) error {
+func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string, newsID int64, title, body string) error {
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -55,8 +53,8 @@ func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string
 
 			messages = append(messages, ExpoPushMessage{
 				To:    token,
-				Title: newsPushTitle,
-				Body:  newsPushBody,
+				Title: title,
+				Body:  body,
 				Data: map[string]any{
 					"screen": screen,
 				},

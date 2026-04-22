@@ -131,7 +131,7 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if news.Status == "published" {
-		h.dispatchNewsPublished(news.ID)
+		h.dispatchNewsPublished(news.ID, news.Title, news.Summary)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -215,7 +215,7 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shouldNotify {
-		h.dispatchNewsPublished(news.ID)
+		h.dispatchNewsPublished(news.ID, news.Title, news.Summary)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -283,12 +283,12 @@ func hasNewsUpdateFields(req *models.UpdateNewsRequest) bool {
 		req.PublishedAt != nil
 }
 
-func (h *NewsHandler) dispatchNewsPublished(newsID int64) {
+func (h *NewsHandler) dispatchNewsPublished(newsID int64, title, summary string) {
 	if h.pushTokenRepo == nil || h.pushService == nil {
 		return
 	}
 
-	go func(id int64) {
+	go func(id int64, t, s string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
@@ -302,8 +302,8 @@ func (h *NewsHandler) dispatchNewsPublished(newsID int64) {
 			return
 		}
 
-		if err := h.pushService.SendNewsPublished(ctx, tokens, id); err != nil {
+		if err := h.pushService.SendNewsPublished(ctx, tokens, id, t, s); err != nil {
 			log.Printf("warning: failed to send news notification for news %d: %v", id, err)
 		}
-	}(newsID)
+	}(newsID, title, summary)
 }

@@ -42,7 +42,7 @@ func TestExpoPushService_SendNewsPublished_SendsExpectedPayload(t *testing.T) {
 		endpoint: server.URL,
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), []string{"ExponentPushToken[abc]"}, 123); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), []string{"ExponentPushToken[abc]"}, 123, "Test Title", "Test Summary"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -58,11 +58,11 @@ func TestExpoPushService_SendNewsPublished_SendsExpectedPayload(t *testing.T) {
 	if msg.To != "ExponentPushToken[abc]" {
 		t.Errorf("expected token %q, got %q", "ExponentPushToken[abc]", msg.To)
 	}
-	if msg.Title != newsPushTitle {
-		t.Errorf("expected title %q, got %q", newsPushTitle, msg.Title)
+	if msg.Title != "Test Title" {
+		t.Errorf("expected title %q, got %q", "Test Title", msg.Title)
 	}
-	if msg.Body != newsPushBody {
-		t.Errorf("expected body %q, got %q", newsPushBody, msg.Body)
+	if msg.Body != "Test Summary" {
+		t.Errorf("expected body %q, got %q", "Test Summary", msg.Body)
 	}
 	if msg.Data["screen"] != "/(news)/123" {
 		t.Errorf("expected screen %q, got %v", "/(news)/123", msg.Data["screen"])
@@ -100,7 +100,7 @@ func TestExpoPushService_SendNewsPublished_ChunksTokens(t *testing.T) {
 		tokens[i] = fmt.Sprintf("ExponentPushToken[%03d]", i)
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), tokens, 999); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), tokens, 999, "Batch Title", "Batch Summary"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestExpoPushService_SendNewsPublished_EmptyTokens(t *testing.T) {
 		endpoint: server.URL,
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), nil, 1); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), nil, 1, "Empty Title", "Empty Summary"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
