@@ -16,9 +16,12 @@ type ServiceRequest struct {
 	Icon           string          `json:"icon,omitempty"`
 	RequestData    json.RawMessage `json:"request_data"`
 	Attachments    json.RawMessage `json:"attachments,omitempty"`
-	Status         string          `json:"status"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	Status          string          `json:"status"`
+	Latitude        *float64        `json:"latitude,omitempty"`
+	Longitude       *float64        `json:"longitude,omitempty"`
+	GeocodedAddress *string         `json:"geocoded_address,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 type ServiceRequestDetailResponse struct {

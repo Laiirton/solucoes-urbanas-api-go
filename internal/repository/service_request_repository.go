@@ -37,7 +37,7 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 			(user_id, service_id, service_title, category, request_data, attachments, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), NOW())
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
-		          request_data, attachments, status, created_at, updated_at`
+		          request_data, attachments, status, latitude, longitude, geocoded_address, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err = r.db.QueryRow(ctx, insertQuery,
@@ -46,7 +46,7 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 	).Scan(
 		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service request: %w", err)
@@ -90,7 +90,7 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 
 func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id int64) (*models.ServiceRequest, error) {
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
 	          WHERE sr.id = $1`
@@ -99,7 +99,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("service request not found: %w", err)
@@ -116,7 +116,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id`
 
@@ -147,7 +147,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at
+	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
 	          WHERE sr.user_id = $1`
@@ -182,7 +182,7 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 		if err := rows.Scan(
 			&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-			&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service request: %w", err)
 		}
@@ -250,13 +250,13 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 		UPDATE service_requests SET status = $1, updated_at = NOW()
 		WHERE id = $2
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
-		          request_data, attachments, status, created_at, updated_at`
+		          request_data, attachments, status, latitude, longitude, geocoded_address, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, status, id).Scan(
 		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update service request status: %w", err)
@@ -286,10 +286,18 @@ func (r *ServiceRequestRepository) DeleteServiceRequest(ctx context.Context, id 
 	return nil
 }
 
+func (r *ServiceRequestRepository) SaveGeocoding(ctx context.Context, id int64, lat, lon float64, address string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE service_requests SET latitude = $1, longitude = $2, geocoded_address = $3 WHERE id = $4`,
+		lat, lon, address, id,
+	)
+	return err
+}
+
 func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx context.Context, serviceID int64, page, limit int) ([]*models.ServiceRequestDetailResponse, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.created_at, sr.updated_at,
+	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at,
 	                 u.username, u.email, u.cpf, u.birth_date, u.type, u.created_at, u.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
@@ -311,7 +319,7 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 		if err := rows.Scan(
 			&sr.ID, &uID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-			&sr.Attachments, &sr.Status, &sr.CreatedAt, &sr.UpdatedAt,
+			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
 			&user.Username, &user.Email, &user.CPF, &user.BirthDate, &user.Type, &user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			// If user is null, partial scan might fail or return zero values.
