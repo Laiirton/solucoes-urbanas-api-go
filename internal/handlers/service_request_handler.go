@@ -17,10 +17,11 @@ type ServiceRequestHandler struct {
 	srRepo        *repository.ServiceRequestRepository
 	userRepo      *repository.UserRepository
 	uploadService *services.UploadService
+	geoService    *services.GeocodingService
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, uploadService *services.UploadService) *ServiceRequestHandler {
-	return &ServiceRequestHandler{srRepo: srRepo, userRepo: userRepo, uploadService: uploadService}
+func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, uploadService *services.UploadService, geoService *services.GeocodingService) *ServiceRequestHandler {
+	return &ServiceRequestHandler{srRepo: srRepo, userRepo: userRepo, uploadService: uploadService, geoService: geoService}
 }
 
 // POST /service-requests
@@ -123,7 +124,54 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")
 		return
 	}
-	respondJSON(w, http.StatusOK, list)
+
+	// Processar cada service request e adicionar coordenadas geográficas
+	var result []*models.ServiceRequestWithLocation
+	for _, sr := range list {
+		// Extrair endereço do request_data
+		address := extractAddressFromRequestData(sr.RequestData)
+
+		// Geocodificar o endereço
+		geoResult, _ := h.geoService.GeocodeAddress(address)
+
+		locationSR := &models.ServiceRequestWithLocation{
+			ServiceRequest: sr,
+			Latitude:       geoResult.Latitude,
+			Longitude:      geoResult.Longitude,
+			AddressFound:   geoResult.Found,
+		}
+		result = append(result, locationSR)
+	}
+
+	respondJSON(w, http.StatusOK, result)
+}
+
+// extractAddressFromRequestData extrai o endereço do JSON de request_data
+func extractAddressFromRequestData(requestData json.RawMessage) string {
+	if len(requestData) == 0 {
+		return ""
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(requestData, &data); err != nil {
+		return ""
+	}
+
+	// Tentar campos comuns de endereço
+	if addr, ok := data["endereco"].(string); ok && addr != "" {
+		return addr
+	}
+	if addr, ok := data["address"].(string); ok && addr != "" {
+		return addr
+	}
+	if addr, ok := data["logradouro"].(string); ok && addr != "" {
+		return addr
+	}
+	if addr, ok := data["street"].(string); ok && addr != "" {
+		return addr
+	}
+
+	return ""
 }
 
 // GET /service-requests/{id}

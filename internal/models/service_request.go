@@ -38,3 +38,11 @@ type CreateServiceRequestRequest struct {
 type UpdateServiceRequestStatusRequest struct {
 	Status string `json:"status"`
 }
+
+// ServiceRequestWithLocation estende ServiceRequest com campos de geolocalização
+type ServiceRequestWithLocation struct {
+	*ServiceRequest
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
+	AddressFound bool    `json:"address_found"`
+}
