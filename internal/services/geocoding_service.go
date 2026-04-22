@@ -63,9 +63,9 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	q.Add("format", "json")
 	q.Add("limit", "1")
 	q.Add("addressdetails", "1")
-	// Foco na área da cidade com viewbox (aproximadamente 10km ao redor do centro de Cacimbas)
-	q.Add("viewbox", "-37.9000,-7.1000,-37.7000,-7.3000")
-	q.Add("bounded", "1")
+	q.Add("countrycodes", "br")
+	// Viewbox prioriza resultados na área de Cacimbas (sem bounded=1 para não restringir demais)
+	q.Add("viewbox", "-38.0000,-7.0000,-37.6000,-7.4000")
 	reqURL.RawQuery = q.Encode()
 
 	req, err := http.NewRequest(http.MethodGet, reqURL.String(), nil)
