@@ -123,6 +123,7 @@ func Setup(
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
 			r.Get("/service-requests", srHandler.ListServiceRequests)
 			r.Get("/service-requests/{id}", srHandler.GetServiceRequest)
+			r.Get("/service-requests/{id}/geocode", srHandler.GeocodeServiceRequest)
 			r.Patch("/service-requests/{id}/status", srHandler.UpdateServiceRequestStatus)
 			r.Delete("/service-requests/{id}", srHandler.DeleteServiceRequest)
 		})

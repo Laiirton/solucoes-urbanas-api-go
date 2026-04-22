@@ -124,26 +124,48 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")
 		return
 	}
+	respondJSON(w, http.StatusOK, list)
+}
 
-	// Processar cada service request e adicionar coordenadas geográficas
-	var result []*models.ServiceRequestWithLocation
-	for _, sr := range list {
-		// Extrair endereço do request_data
-		address := extractAddressFromRequestData(sr.RequestData)
-
-		// Geocodificar o endereço
-		geoResult, _ := h.geoService.GeocodeAddress(address)
-
-		locationSR := &models.ServiceRequestWithLocation{
-			ServiceRequest: sr,
-			Latitude:       geoResult.Latitude,
-			Longitude:      geoResult.Longitude,
-			AddressFound:   geoResult.Found,
-		}
-		result = append(result, locationSR)
+// GET /service-requests/{id}/geocode - Geocodifica o endereço do service request
+func (h *ServiceRequestHandler) GeocodeServiceRequest(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid service request id")
+		return
 	}
 
-	respondJSON(w, http.StatusOK, result)
+	// Buscar o service request
+	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
+	// Extrair endereço do request_data
+	address := extractAddressFromRequestData(sr.RequestData)
+	if address == "" {
+		respondError(w, http.StatusBadRequest, "no address found in service request data")
+		return
+	}
+
+	// Geocodificar o endereço
+	geoResult, err := h.geoService.GeocodeAddress(address)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to geocode address")
+		return
+	}
+
+	response := map[string]interface{}{
+		"service_request_id": id,
+		"address":            address,
+		"latitude":           geoResult.Latitude,
+		"longitude":          geoResult.Longitude,
+		"display_name":       geoResult.DisplayName,
+		"found":              geoResult.Found,
+	}
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 // extractAddressFromRequestData extrai o endereço do JSON de request_data
