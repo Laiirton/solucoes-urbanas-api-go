@@ -226,12 +226,7 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 		}
 	}
 
-	response := map[string]interface{}{
-		"total":     len(locations),
-		"locations": locations,
-	}
-
-	respondJSON(w, http.StatusOK, response)
+	respondJSON(w, http.StatusOK, locations)
 }
 
 // extractAddressFromRequestData extrai o endereço do JSON de request_data
