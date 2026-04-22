@@ -5,18 +5,16 @@ import (
 	"net/http"
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
-	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
+	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 )
 
 type HomeHandler struct {
-	srRepo   *repository.ServiceRequestRepository
-	userRepo *repository.UserRepository
+	srSvc *services.ServiceRequestService
 }
 
-func NewHomeHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository) *HomeHandler {
+func NewHomeHandler(srSvc *services.ServiceRequestService) *HomeHandler {
 	return &HomeHandler{
-		srRepo:   srRepo,
-		userRepo: userRepo,
+		srSvc: srSvc,
 	}
 }
 
@@ -27,19 +25,7 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userRepo.GetUserByID(r.Context(), userID)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-
-	isAdmin := user.Type != nil && *user.Type == "admin"
-	var categoryFilter string
-	if isAdmin && user.Team != nil {
-		categoryFilter = user.Team.ServiceCategory
-	}
-
-	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, categoryFilter)
+	resp, err := h.srSvc.GetHomeStats(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Error computing home stats", http.StatusInternalServerError)
 		return
