@@ -204,6 +204,7 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 		Longitude    float64 `json:"longitude"`
 		ServiceTitle string  `json:"service_title"`
 		Status       string  `json:"status"`
+		Icon         string  `json:"icon"`
 		Found        bool    `json:"found"`
 	}
 
@@ -214,6 +215,10 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 
 		// Incluir apenas se o endereço foi encontrado
 		if geoResult.Found {
+			icon := ""
+			if sr.ServiceID != nil {
+				icon = models.GetServiceIcon(*sr.ServiceID)
+			}
 			locations = append(locations, MapLocation{
 				ID:           sr.ID,
 				Address:      address,
@@ -221,6 +226,7 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 				Longitude:    geoResult.Longitude,
 				ServiceTitle: sr.ServiceTitle,
 				Status:       sr.Status,
+				Icon:         icon,
 				Found:        geoResult.Found,
 			})
 		}

@@ -60,6 +60,7 @@ type MapLocation struct {
 	Longitude    float64 `json:"longitude"`
 	ServiceTitle string  `json:"service_title"`
 	Status       string  `json:"status"`
+	Icon         string  `json:"icon"`
 	Found        bool    `json:"found"`
 }
 

@@ -57,6 +57,10 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 			if address != "" {
 				geoResult, _ := h.geoService.GeocodeAddress(address)
 				if geoResult.Found {
+					icon := ""
+					if sr.ServiceID != nil {
+						icon = models.GetServiceIcon(*sr.ServiceID)
+					}
 					resp.MapLocations = append(resp.MapLocations, models.MapLocation{
 						ID:           sr.ID,
 						Address:      address,
@@ -64,6 +68,7 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 						Longitude:    geoResult.Longitude,
 						ServiceTitle: sr.ServiceTitle,
 						Status:       sr.Status,
+						Icon:         icon,
 						Found:        geoResult.Found,
 					})
 				}
