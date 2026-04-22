@@ -46,7 +46,7 @@ func Setup(
 	geoService := services.NewGeocodingService()
 	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, uploadService, geoService)
 	geoHandler := handlers.NewGeolocationHandler()
-	homeHandler := handlers.NewHomeHandler(srRepo, userRepo)
+	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	pushService := services.NewExpoPushService()
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, pushService, storageService)
 	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo)
