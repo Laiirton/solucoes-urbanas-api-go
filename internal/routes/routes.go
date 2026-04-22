@@ -122,10 +122,15 @@ func Setup(
 			// Service Requests
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
 			r.Get("/service-requests", srHandler.ListServiceRequests)
-			r.Get("/service-requests/{id}", srHandler.GetServiceRequest)
-			r.Get("/service-requests/{id}/geocode", srHandler.GeocodeServiceRequest)
-			r.Patch("/service-requests/{id}/status", srHandler.UpdateServiceRequestStatus)
-			r.Delete("/service-requests/{id}", srHandler.DeleteServiceRequest)
+			r.Route("/service-requests/{id}", func(r chi.Router) {
+				r.Get("/", srHandler.GetServiceRequest)
+				r.Patch("/status", srHandler.UpdateServiceRequestStatus)
+				r.Delete("/", srHandler.DeleteServiceRequest)
+			})
+
+			// Geocoding
+			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)
+			r.Get("/geocode-service-requests/{id}", srHandler.GeocodeServiceRequest)
 		})
 	})
 
