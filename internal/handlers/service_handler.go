@@ -123,4 +123,3 @@ func (h *ServiceHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service deleted successfully"})
 }
-

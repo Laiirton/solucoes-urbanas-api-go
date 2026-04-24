@@ -23,14 +23,16 @@ import (
 type NewsHandler struct {
 	repo          *repository.NewsRepository
 	pushTokenRepo *repository.PushTokenRepository
+	sysNotifRepo  *repository.SystemNotificationRepository
 	pushService   *services.ExpoPushService
 	storage       services.StorageService
 }
 
-func NewNewsHandler(repo *repository.NewsRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, storage services.StorageService) *NewsHandler {
+func NewNewsHandler(repo *repository.NewsRepository, pushTokenRepo *repository.PushTokenRepository, sysNotifRepo *repository.SystemNotificationRepository, pushService *services.ExpoPushService, storage services.StorageService) *NewsHandler {
 	return &NewsHandler{
 		repo:          repo,
 		pushTokenRepo: pushTokenRepo,
+		sysNotifRepo:  sysNotifRepo,
 		pushService:   pushService,
 		storage:       storage,
 	}
@@ -132,6 +134,7 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 
 	if news.Status == "published" {
 		h.dispatchNewsPublished(news.ID, news.Title, news.Summary)
+		h.saveSystemNotification(news.ID, news.Title, news.Summary)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -216,6 +219,7 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 
 	if shouldNotify {
 		h.dispatchNewsPublished(news.ID, news.Title, news.Summary)
+		h.saveSystemNotification(news.ID, news.Title, news.Summary)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -304,6 +308,32 @@ func (h *NewsHandler) dispatchNewsPublished(newsID int64, title, summary string)
 
 		if err := h.pushService.SendNewsPublished(ctx, tokens, id, t, s); err != nil {
 			log.Printf("warning: failed to send news notification for news %d: %v", id, err)
+		}
+	}(newsID, title, summary)
+}
+
+func (h *NewsHandler) saveSystemNotification(newsID int64, title, summary string) {
+	if h.sysNotifRepo == nil {
+		return
+	}
+
+	go func(id int64, t, s string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		data, _ := json.Marshal(map[string]interface{}{
+			"news_id": id,
+			"screen":  fmt.Sprintf("/(news)/%d", id),
+		})
+
+		_, err := h.sysNotifRepo.Create(ctx, &models.SystemNotification{
+			Title: t,
+			Body:  s,
+			Type:  "news",
+			Data:  data,
+		})
+		if err != nil {
+			log.Printf("warning: failed to save system notification for news %d: %v", id, err)
 		}
 	}(newsID, title, summary)
 }

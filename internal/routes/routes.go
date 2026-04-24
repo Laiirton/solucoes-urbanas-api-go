@@ -21,6 +21,7 @@ func Setup(
 	newsRepo *repository.NewsRepository,
 	teamRepo *repository.TeamRepository,
 	pushTokenRepo *repository.PushTokenRepository,
+	sysNotifRepo *repository.SystemNotificationRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -44,12 +45,12 @@ func Setup(
 	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo)
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
-	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, uploadService, geoService)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, uploadService, geoService)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	pushService := services.NewExpoPushService()
-	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, pushService, storageService)
-	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo)
+	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
+	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo, sysNotifRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +112,12 @@ func Setup(
 
 			// Notifications
 			r.Post("/notifications/push-tokens", notificationHandler.RegisterPushToken)
+			r.Get("/notifications", notificationHandler.ListSystemNotifications)
+			r.Post("/notifications", notificationHandler.CreateSystemNotification)
+			r.Get("/notifications/{id}", notificationHandler.GetSystemNotification)
+			r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
+			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
+			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
 
 			// Teams
 			r.Get("/teams", teamHandler.ListTeams)

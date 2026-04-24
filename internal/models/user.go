@@ -7,30 +7,30 @@ import (
 )
 
 type User struct {
-	ID int64 `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"-"` // never expose password in JSON
-	Email string `json:"email"`
-	FullName *string `json:"full_name,omitempty"`
-	CPF *string `json:"cpf,omitempty"`
-	BirthDate *time.Time `json:"birth_date,omitempty"`
-	Type *string `json:"type,omitempty"`
-	TeamID *int64 `json:"team_id,omitempty"`
-	Team *Team `json:"team,omitempty"`
-	ProfileImageURL *string `json:"profile_image_url,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID              int64      `json:"id"`
+	Username        string     `json:"username"`
+	Password        string     `json:"-"` // never expose password in JSON
+	Email           string     `json:"email"`
+	FullName        *string    `json:"full_name,omitempty"`
+	CPF             *string    `json:"cpf,omitempty"`
+	BirthDate       *time.Time `json:"birth_date,omitempty"`
+	Type            *string    `json:"type,omitempty"`
+	TeamID          *int64     `json:"team_id,omitempty"`
+	Team            *Team      `json:"team,omitempty"`
+	ProfileImageURL *string    `json:"profile_image_url,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type CreateUserRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email string `json:"email"`
-	FullName *string `json:"full_name,omitempty"`
-	CPF *string `json:"cpf,omitempty"`
-	BirthDate *string `json:"birth_date,omitempty"`
-	Type *string `json:"type,omitempty"`
-	TeamID *int64 `json:"team_id,omitempty"`
+	Username        string  `json:"username"`
+	Password        string  `json:"password"`
+	Email           string  `json:"email"`
+	FullName        *string `json:"full_name,omitempty"`
+	CPF             *string `json:"cpf,omitempty"`
+	BirthDate       *string `json:"birth_date,omitempty"`
+	Type            *string `json:"type,omitempty"`
+	TeamID          *int64  `json:"team_id,omitempty"`
 	ProfileImageURL *string `json:"profile_image_url,omitempty"`
 }
 
@@ -65,13 +65,13 @@ func (r *CreateUserRequest) Validate() error {
 }
 
 type UpdateUserRequest struct {
-	Username *string `json:"username,omitempty"`
-	Email *string `json:"email,omitempty"`
-	FullName *string `json:"full_name,omitempty"`
-	CPF *string `json:"cpf,omitempty"`
-	BirthDate *string `json:"birth_date,omitempty"`
-	Type *string `json:"type,omitempty"`
-	TeamID *int64 `json:"team_id,omitempty"`
+	Username        *string `json:"username,omitempty"`
+	Email           *string `json:"email,omitempty"`
+	FullName        *string `json:"full_name,omitempty"`
+	CPF             *string `json:"cpf,omitempty"`
+	BirthDate       *string `json:"birth_date,omitempty"`
+	Type            *string `json:"type,omitempty"`
+	TeamID          *int64  `json:"team_id,omitempty"`
 	ProfileImageURL *string `json:"profile_image_url,omitempty"`
 }
 
@@ -86,8 +86,8 @@ type LoginResponse struct {
 }
 
 type UserDetailResponse struct {
-	User          User              `json:"user"`
-	TotalRequests int               `json:"total_requests"`
+	User           User              `json:"user"`
+	TotalRequests  int               `json:"total_requests"`
 	Requests       []*ServiceRequest `json:"requests"`
 	RequestSummary map[string]int    `json:"request_summary"`
 }

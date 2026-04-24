@@ -6,16 +6,16 @@ import (
 )
 
 type ServiceRequest struct {
-	ID             int64           `json:"id"`
-	UserID         *int64          `json:"user_id,omitempty"`
-	UserName       string          `json:"user_name,omitempty"`
-	ServiceID      *int64          `json:"service_id,omitempty"`
-	ProtocolNumber *string         `json:"protocol_number,omitempty"`
-	ServiceTitle   string          `json:"service_title"`
-	Category       string          `json:"category"`
-	Icon           string          `json:"icon,omitempty"`
-	RequestData    json.RawMessage `json:"request_data"`
-	Attachments    json.RawMessage `json:"attachments,omitempty"`
+	ID              int64           `json:"id"`
+	UserID          *int64          `json:"user_id,omitempty"`
+	UserName        string          `json:"user_name,omitempty"`
+	ServiceID       *int64          `json:"service_id,omitempty"`
+	ProtocolNumber  *string         `json:"protocol_number,omitempty"`
+	ServiceTitle    string          `json:"service_title"`
+	Category        string          `json:"category"`
+	Icon            string          `json:"icon,omitempty"`
+	RequestData     json.RawMessage `json:"request_data"`
+	Attachments     json.RawMessage `json:"attachments,omitempty"`
 	Status          string          `json:"status"`
 	Latitude        *float64        `json:"latitude,omitempty"`
 	Longitude       *float64        `json:"longitude,omitempty"`

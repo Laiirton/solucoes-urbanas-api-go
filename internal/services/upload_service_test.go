@@ -299,9 +299,9 @@ func TestUploadService_RollbackOnUploadFailure(t *testing.T) {
 
 // failingMockStorage succeeds for the first N uploads, then fails
 type failingMockStorage struct {
-	uploaded   []string
-	deleted    []string
-	failAfterN int
+	uploaded    []string
+	deleted     []string
+	failAfterN  int
 	uploadCount int
 }
 

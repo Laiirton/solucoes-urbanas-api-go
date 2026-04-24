@@ -3,12 +3,12 @@ package models
 // ServiceIconMapping maps id_service to icon names based on category
 var ServiceIconMapping = map[int]string{
 	// Limpeza Urbana - brush-cleaning
-	1:  "brush-cleaning",
-	2:  "brush-cleaning",
-	3:  "brush-cleaning",
-	4:  "brush-cleaning",
-	5:  "brush-cleaning",
-	6:  "brush-cleaning",
+	1: "brush-cleaning",
+	2: "brush-cleaning",
+	3: "brush-cleaning",
+	4: "brush-cleaning",
+	5: "brush-cleaning",
+	6: "brush-cleaning",
 
 	// Saúde - hospital
 	7:  "hospital",

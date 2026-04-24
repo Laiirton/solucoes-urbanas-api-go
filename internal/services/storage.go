@@ -92,4 +92,3 @@ func (s *supabaseStorageService) DeleteFile(fileURL string) error {
 
 	return nil
 }
-

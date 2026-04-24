@@ -19,8 +19,8 @@ import (
 
 type UserHandler struct {
 	userRepo *repository.UserRepository
-	srRepo *repository.ServiceRequestRepository
-	storage services.StorageService
+	srRepo   *repository.ServiceRequestRepository
+	storage  services.StorageService
 }
 
 func NewUserHandler(userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, storage services.StorageService) *UserHandler {
