@@ -148,6 +148,16 @@ func (h *NotificationHandler) GetSystemNotification(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Verificação de permissão: Usuário só pode ver notificações globais ou próprias
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		// Se notificação tem usuário atribuido e não é o mesmo logado: proibido
+		if n.UserID != nil && *n.UserID != userID {
+			respondError(w, http.StatusForbidden, "you do not have permission to access this notification")
+			return
+		}
+	}
+
 	respondJSON(w, http.StatusOK, n)
 }
 
@@ -195,13 +205,29 @@ func (h *NotificationHandler) MarkSystemNotificationAsRead(w http.ResponseWriter
 		return
 	}
 
-	n, err := h.sysNotifRepo.MarkAsRead(r.Context(), id)
+	// Busca primeiro para validar permissão
+	n, err := h.sysNotifRepo.GetByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	// Verificação de permissão
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		if n.UserID != nil && *n.UserID != userID {
+			respondError(w, http.StatusForbidden, "you do not have permission to modify this notification")
+			return
+		}
+	}
+
+	updated, err := h.sysNotifRepo.MarkAsRead(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	respondJSON(w, http.StatusOK, n)
+	respondJSON(w, http.StatusOK, updated)
 }
 
 func (h *NotificationHandler) DeleteSystemNotification(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +240,22 @@ func (h *NotificationHandler) DeleteSystemNotification(w http.ResponseWriter, r 
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid id")
 		return
+	}
+
+	// Busca primeiro para validar permissão
+	n, err := h.sysNotifRepo.GetByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	// Verificação de permissão
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		if n.UserID != nil && *n.UserID != userID {
+			respondError(w, http.StatusForbidden, "you do not have permission to delete this notification")
+			return
+		}
 	}
 
 	if err := h.sysNotifRepo.Delete(r.Context(), id); err != nil {

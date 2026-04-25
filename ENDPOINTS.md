@@ -201,8 +201,9 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 ## Notificações
 
+Todos endpoints dessa seção exigem autenticação JWT.
+
 - `POST /api/notifications/push-tokens`
-  - Requer autenticação JWT.
   - Registra ou atualiza o `ExponentPushToken[...]` do dispositivo do usuário autenticado.
   - Payload JSON:
     ```json
@@ -210,7 +211,29 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       "token": "ExponentPushToken[...]"
     }
     ```
-  - Esse token é usado para receber notificações automáticas quando notícias forem publicadas.
+  - Esse token é usado para receber notificações automáticas quando notícias forem publicadas ou houver atualização em pedidos de serviço.
+
+- `GET /api/notifications`
+  - Lista notificações do usuário logado (somente as que ele tem permissão)
+  - Parâmetros de query (opcionais):
+    - `type`: filtra por tipo de notificação
+    - `unread_only`: `true` para retornar somente notificações não lidas
+    - `page`: número da página (padrão: 1)
+    - `limit`: itens por página (padrão: 20)
+
+- `GET /api/notifications/{id}`
+  - Retorna detalhes de uma notificação específica
+  - Retorna `403 Forbidden` caso usuário não tenha permissão para visualizar
+  - Retorna `404 Not Found` caso notificação não exista
+
+- `PATCH /api/notifications/{id}/read`
+  - Marca notificação como lida, define a data de visualização
+  - Retorna `403 Forbidden` caso usuário não seja dono da notificação
+
+- `DELETE /api/notifications/{id}`
+  - Remove notificação
+  - Retorna `403 Forbidden` caso usuário não seja dono da notificação
+  - Retorna status `204 No Content` em caso de sucesso
 
 ## Equipes (Teams)
 
