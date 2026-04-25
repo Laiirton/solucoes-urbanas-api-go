@@ -59,3 +59,23 @@ func (r *PushTokenRepository) ListTokens(ctx context.Context) ([]string, error) 
 
 	return tokens, nil
 }
+
+func (r *PushTokenRepository) ListTokensByUser(ctx context.Context, userID int64) ([]string, error) {
+	query := `SELECT token FROM user_push_tokens WHERE user_id = $1 ORDER BY updated_at DESC, id DESC`
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list push tokens for user: %w", err)
+	}
+	defer rows.Close()
+
+	var tokens []string
+	for rows.Next() {
+		var token string
+		if err := rows.Scan(&token); err != nil {
+			return nil, fmt.Errorf("failed to scan push token: %w", err)
+		}
+		tokens = append(tokens, token)
+	}
+
+	return tokens, nil
+}

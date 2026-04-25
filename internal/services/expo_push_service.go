@@ -73,6 +73,33 @@ func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string
 	return nil
 }
 
+func (s *ExpoPushService) SendToUser(ctx context.Context, userTokens []string, title, body string, data map[string]any) error {
+	if len(userTokens) == 0 {
+		return nil
+	}
+
+	messages := make([]ExpoPushMessage, 0, len(userTokens))
+	for _, token := range userTokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		messages = append(messages, ExpoPushMessage{
+			To:    token,
+			Title: title,
+			Body:  body,
+			Data:  data,
+		})
+	}
+
+	if len(messages) == 0 {
+		return nil
+	}
+
+	return s.sendBatch(ctx, messages)
+}
+
 func (s *ExpoPushService) sendBatch(ctx context.Context, messages []ExpoPushMessage) error {
 	payload, err := json.Marshal(messages)
 	if err != nil {
