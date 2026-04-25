@@ -16,20 +16,6 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
 
 ## Autenticação pública
 
-- `POST /api/auth/register`
-  - Registra um novo usuário.
-  - Payload JSON:
-    ```json
-    {
-      "username": "usuario123",
-      "email": "user@exemplo.com",
-      "password": "senha_forte",
-      "full_name": "Nome Completo",
-      "cpf": "123.456.789-00",
-      "birth_date": "01/01/1990",
-      "type": "user"
-    }
-    ```
 - `POST /api/auth/login`
   - Faz login do usuário.
   - Aceita username ou email no campo `username`.

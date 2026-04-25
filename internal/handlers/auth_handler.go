@@ -20,40 +20,6 @@ func NewAuthHandler(userRepo *repository.UserRepository, jwtSecret string) *Auth
 	return &AuthHandler{userRepo: userRepo, jwtSecret: jwtSecret}
 }
 
-// POST /auth/register
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var req models.CreateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to hash password")
-		return
-	}
-
-	user, err := h.userRepo.CreateUser(r.Context(), &req, string(hashedPassword))
-	if err != nil {
-		respondError(w, http.StatusConflict, "could not create user: "+err.Error())
-		return
-	}
-
-	token, err := h.generateToken(user.ID)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to generate token")
-		return
-	}
-
-	respondJSON(w, http.StatusCreated, models.LoginResponse{Token: token, User: *user})
-}
-
 // POST /auth/login
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest

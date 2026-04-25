@@ -64,7 +64,6 @@ func Setup(
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
 		// Public auth routes
-		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
 
 		// Geolocation route
