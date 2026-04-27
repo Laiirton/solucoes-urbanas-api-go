@@ -37,6 +37,16 @@ func (r *AppConfigRepository) GetBanners(ctx context.Context) ([]models.AppBanne
 	return banners, nil
 }
 
+func (r *AppConfigRepository) GetBannerByID(ctx context.Context, id int64) (*models.AppBanner, error) {
+	query := `SELECT id, image_url, title, link_url, order_index, is_active, created_at FROM app_banners WHERE id = $1`
+	var b models.AppBanner
+	err := r.db.QueryRow(ctx, query, id).Scan(&b.ID, &b.ImageURL, &b.Title, &b.LinkURL, &b.OrderIndex, &b.IsActive, &b.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
 func (r *AppConfigRepository) GetSetting(ctx context.Context, key string, target interface{}) error {
 	var val []byte
 	err := r.db.QueryRow(ctx, "SELECT value FROM app_settings WHERE key = $1", key).Scan(&val)

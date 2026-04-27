@@ -53,7 +53,7 @@ func Setup(
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
 	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo, sysNotifRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
-	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo)
+	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -145,6 +145,7 @@ func Setup(
 
 			// App Configuration (Admin)
 			r.Put("/app/settings/{key}", appConfigHandler.UpdateSetting)
+			r.Post("/app/upload-image", appConfigHandler.UploadImage)
 			r.Get("/app/banners", appConfigHandler.ListBanners)
 			r.Post("/app/banners", appConfigHandler.CreateBanner)
 			r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)

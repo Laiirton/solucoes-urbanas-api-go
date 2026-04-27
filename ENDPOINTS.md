@@ -355,6 +355,15 @@ Estes endpoints exigem autenticação administrativa.
     [1, 5, 10]
     ```
 
+- `POST /api/app/upload-image`
+  - Faz upload de uma imagem para ser usada no logo ou banners.
+  - Aceita `multipart/form-data`:
+    - `image`: (file) Arquivo de imagem.
+  - Retorna o URL público da imagem:
+    ```json
+    { "url": "https://..." }
+    ```
+
 - `GET /api/app/banners`
   - Lista todos os banners (incluindo inativos) para gestão.
 
