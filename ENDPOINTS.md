@@ -68,6 +68,26 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     - `status_stats`: estatísticas por status dos pedidos
     - `recent_requests`: últimos 5 pedidos relacionados ao serviço
 
+## Configuração do App (Mobile Home)
+
+- `GET /api/app/config`
+  - Retorna a configuração completa para a Home do aplicativo mobile.
+  - Estrutura modular baseada em `sections` para permitir reordenação dinâmica.
+  - Resposta JSON:
+    ```json
+    {
+      "logo_url": "https://...",
+      "banners": [
+        { "id": 1, "image_url": "...", "title": "...", "link_url": "...", "order_index": 0 }
+      ],
+      "sections": [
+        { "type": "banners", "title": "Destaques", "data": [...] },
+        { "type": "categories", "title": "Categorias", "data": [...] },
+        { "type": "services", "title": "Serviços em Destaque", "data": [...] }
+      ]
+    }
+    ```
+
 ## Rotas protegidas (JWT obrigatório)
 
 - `GET /api/auth/me`
@@ -322,3 +342,37 @@ Todos endpoints dessa seção exigem autenticação JWT.
     - Status permitidos: `pending`, `in_progress`, `completed`, `cancelled`.
 - `DELETE /api/service-requests/{id}`
   - Exclui um pedido de serviço por `id`.
+
+## Gestão de Configurações do App (Admin)
+
+Estes endpoints exigem autenticação administrativa.
+
+- `PUT /api/app/settings/{key}`
+  - Atualiza uma configuração global do app.
+  - Chaves suportadas: `logo_url`, `featured_services` (array de IDs), `featured_categories` (array de nomes).
+  - Exemplo para `featured_services`:
+    ```json
+    [1, 5, 10]
+    ```
+
+- `GET /api/app/banners`
+  - Lista todos os banners (incluindo inativos) para gestão.
+
+- `POST /api/app/banners`
+  - Cria um novo banner para o carrossel.
+  - Payload JSON:
+    ```json
+    {
+      "image_url": "https://...",
+      "title": "Título Opcional",
+      "link_url": "https://...",
+      "order_index": 0,
+      "is_active": true
+    }
+    ```
+
+- `PUT /api/app/banners/{id}`
+  - Atualiza um banner existente.
+
+- `DELETE /api/app/banners/{id}`
+  - Remove um banner permanentemente.

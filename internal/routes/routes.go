@@ -22,6 +22,7 @@ func Setup(
 	teamRepo *repository.TeamRepository,
 	pushTokenRepo *repository.PushTokenRepository,
 	sysNotifRepo *repository.SystemNotificationRepository,
+	appConfigRepo *repository.AppConfigRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -52,6 +53,7 @@ func Setup(
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
 	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo, sysNotifRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
+	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -76,6 +78,9 @@ func Setup(
 		// Public news routes (read-only)
 		r.Get("/news", newsHandler.ListNews)
 		r.Get("/news/{id}", newsHandler.GetNews)
+
+		// App Config route (public)
+		r.Get("/app/config", appConfigHandler.GetMobileConfig)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -137,6 +142,13 @@ func Setup(
 			// Geocoding
 			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)
 			r.Get("/geocode-service-requests/{id}", srHandler.GeocodeServiceRequest)
+
+			// App Configuration (Admin)
+			r.Put("/app/settings/{key}", appConfigHandler.UpdateSetting)
+			r.Get("/app/banners", appConfigHandler.ListBanners)
+			r.Post("/app/banners", appConfigHandler.CreateBanner)
+			r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
+			r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
 		})
 	})
 

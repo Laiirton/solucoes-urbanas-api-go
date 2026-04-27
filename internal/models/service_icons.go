@@ -101,3 +101,28 @@ func GetServiceIcon(serviceID int64) string {
 	}
 	return ""
 }
+
+// GetCategoryIcon returns the icon name for a given category name
+func GetCategoryIcon(category string) string {
+	mapping := map[string]string{
+		"Limpeza Urbana":            "brush-cleaning",
+		"Saúde":                     "hospital",
+		"Educação":                   "school",
+		"Iluminação Pública":        "lightbulb",
+		"Transporte Urbano":         "bus",
+		"Segurança Pública":         "shield",
+		"Esporte e Lazer":           "bike",
+		"Cultura":                   "theater",
+		"Tributação":                "hand-coins",
+		"Assistência Social":        "hand-helping",
+		"Vias Urbanas":              "arrow-left-right",
+		"Arborização e Meio Ambiente": "tree",
+		"Agricultura":               "sprout",
+		"Vigilância Sanitária":      "shield",
+		"Animais":                   "paw",
+	}
+	if icon, ok := mapping[category]; ok {
+		return icon
+	}
+	return "help-circle"
+}
