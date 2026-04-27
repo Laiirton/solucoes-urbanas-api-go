@@ -37,7 +37,7 @@ type MobileHomeResponse struct {
 }
 
 type Section struct {
-	Type  string      `json:"type"` // e.g., "banners", "services", "categories"
+	Type  string      `json:"type"` // e.g., "services", "categories"
 	Title string      `json:"title"`
 	Data  interface{} `json:"data"`
 }

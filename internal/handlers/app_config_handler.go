@@ -56,11 +56,6 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 		Banners: banners,
 		Sections: []models.Section{
 			{
-				Type:  "banners",
-				Title: "Destaques",
-				Data:  banners,
-			},
-			{
 				Type:  "categories",
 				Title: "Categorias",
 				Data:  featuredCategories,

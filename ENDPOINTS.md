@@ -81,7 +81,6 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
         { "id": 1, "image_url": "...", "title": "...", "link_url": "...", "order_index": 0 }
       ],
       "sections": [
-        { "type": "banners", "title": "Destaques", "data": [...] },
         { "type": "categories", "title": "Categorias", "data": [...] },
         { "type": "services", "title": "Serviços em Destaque", "data": [...] }
       ]
