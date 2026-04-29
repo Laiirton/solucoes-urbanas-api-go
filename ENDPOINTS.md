@@ -65,6 +65,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
   - Retorna detalhes de um serviço específico pelo `id`.
   - Inclui estatísticas adicionais:
     - `average_service_time`: tempo médio de atendimento (em dias)
+    - `rating_stats`: média de estrelas e total de avaliações
     - `status_stats`: estatísticas por status dos pedidos
     - `recent_requests`: últimos 5 pedidos relacionados ao serviço
 
@@ -82,7 +83,8 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       ],
       "sections": [
         { "type": "categories", "title": "Categorias", "data": [...] },
-        { "type": "services", "title": "Serviços em Destaque", "data": [...] }
+        { "type": "services", "title": "Serviços em Destaque", "data": [...] },
+        { "type": "top_rated", "title": "Melhores Avaliados", "data": [...] }
       ]
     }
     ```
@@ -384,3 +386,29 @@ Estes endpoints exigem autenticação administrativa.
 
 - `DELETE /api/app/banners/{id}`
   - Remove um banner permanentemente.
+
+## Avaliações de Serviços
+
+- `POST /api/ratings` (Protegido)
+  - Avalia um pedido de serviço concluído (1-5 estrelas).
+  - Um pedido só pode ser avaliado uma vez.
+  - Payload JSON:
+    ```json
+    {
+      "service_request_id": 123,
+      "stars": 5,
+      "comment": "Excelente atendimento!"
+    }
+    ```
+- `GET /api/services/{id}/ratings` (Público)
+  - Lista as avaliações de um serviço específico.
+  - Parâmetros de query: `page`, `limit`.
+- `GET /api/services/{id}/rating-stats` (Público)
+  - Retorna a média de estrelas e o total de avaliações de um serviço.
+  - Resposta JSON:
+    ```json
+    {
+      "average": 4.5,
+      "count": 120
+    }
+    ```

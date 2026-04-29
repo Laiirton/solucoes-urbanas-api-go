@@ -502,6 +502,34 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		topServices = []models.PopularService{}
 	}
 
+	// Get top 5 best rated services
+	var topRated []models.TopRatedService
+	ratedQuery := `
+		SELECT s.id, s.title, s.category, AVG(r.stars) as avg_stars, COUNT(r.id) as rating_count
+		FROM services s
+		INNER JOIN service_ratings r ON s.id = r.service_id
+		GROUP BY s.id, s.title, s.category
+		ORDER BY avg_stars DESC, rating_count DESC
+		LIMIT 5
+	`
+	ratedRows, err := r.db.Query(ctx, ratedQuery)
+	if err != nil {
+		fmt.Printf("Warning: failed to fetch top rated services: %v\n", err)
+	} else {
+		defer ratedRows.Close()
+		for ratedRows.Next() {
+			svc := models.TopRatedService{}
+			if err := ratedRows.Scan(&svc.ID, &svc.Title, &svc.Category, &svc.AverageStars, &svc.RatingCount); err != nil {
+				fmt.Printf("Warning: failed to scan top rated service: %v\n", err)
+				continue
+			}
+			topRated = append(topRated, svc)
+		}
+	}
+	if topRated == nil {
+		topRated = []models.TopRatedService{}
+	}
+
 	stats := models.HomeStats{
 		TotalRequests:       models.StatDetail{Total: total, Percent: 100},
 		PendingRequests:     models.StatDetail{Total: counts["pending"], Percent: pct(counts["pending"], total)},
@@ -715,5 +743,6 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		Volume7d:        volume7d,
 		Alerts:          alerts,
 		PopularServices: topServices,
+		TopRatedServices: topRated,
 	}, nil
 }

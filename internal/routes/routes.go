@@ -23,6 +23,7 @@ func Setup(
 	pushTokenRepo *repository.PushTokenRepository,
 	sysNotifRepo *repository.SystemNotificationRepository,
 	appConfigRepo *repository.AppConfigRepository,
+	ratingRepo *repository.ServiceRatingRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -43,17 +44,18 @@ func Setup(
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo, srRepo, storageService)
-	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo)
+	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo, ratingRepo)
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
 	pushService := services.NewExpoPushService()
-	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
 	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo, sysNotifRepo)
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
+	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -74,6 +76,8 @@ func Setup(
 		// Public service routes (read-only)
 		r.Get("/services", serviceHandler.ListServices)
 		r.Get("/services/{id}", serviceHandler.GetService)
+		r.Get("/services/{id}/ratings", ratingHandler.ListRatingsByService)
+		r.Get("/services/{id}/rating-stats", ratingHandler.GetRatingStats)
 
 		// Public news routes (read-only)
 		r.Get("/news", newsHandler.ListNews)
@@ -138,6 +142,9 @@ func Setup(
 				r.Patch("/status", srHandler.UpdateServiceRequestStatus)
 				r.Delete("/", srHandler.DeleteServiceRequest)
 			})
+
+			// Service Ratings
+			r.Post("/ratings", ratingHandler.CreateRating)
 
 			// Geocoding
 			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)

@@ -24,8 +24,10 @@ type StatusStat struct {
 type ServiceDetailResponse struct {
 	*Service
 	AverageServiceTime int                             `json:"average_service_time"`
+	RatingStats        *ServiceRatingStats             `json:"rating_stats,omitempty"`
 	StatusStats        []StatusStat                    `json:"status_stats"`
 	RecentRequests     []*ServiceRequestDetailResponse `json:"recent_requests"`
+	RecentRatings      []*ServiceRatingResponse        `json:"recent_ratings,omitempty"`
 }
 
 type CreateServiceRequest struct {

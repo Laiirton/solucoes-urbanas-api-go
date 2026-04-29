@@ -14,10 +14,11 @@ import (
 type ServiceHandler struct {
 	serviceRepo *repository.ServiceRepository
 	srRepo      *repository.ServiceRequestRepository
+	ratingRepo  *repository.ServiceRatingRepository
 }
 
-func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository) *ServiceHandler {
-	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo}
+func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository) *ServiceHandler {
+	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo, ratingRepo: ratingRepo}
 }
 
 // GET /services
@@ -51,12 +52,16 @@ func (h *ServiceHandler) GetService(w http.ResponseWriter, r *http.Request) {
 	stats, _ := h.srRepo.GetServiceStatusStats(r.Context(), id)
 	avgTime, _ := h.srRepo.GetAverageServiceTime(r.Context(), id)
 	recent, _ := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
+	ratingStats, _ := h.ratingRepo.GetStatsByServiceID(r.Context(), id)
+	recentRatings, _ := h.ratingRepo.ListByServiceID(r.Context(), id, 3, 0)
 
 	resp := models.ServiceDetailResponse{
 		Service:            svc,
 		AverageServiceTime: avgTime,
+		RatingStats:        ratingStats,
 		StatusStats:        stats,
 		RecentRequests:     recent,
+		RecentRatings:      recentRatings,
 	}
 
 	respondJSON(w, http.StatusOK, resp)

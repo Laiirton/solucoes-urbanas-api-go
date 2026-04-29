@@ -26,8 +26,9 @@ type ServiceRequest struct {
 
 type ServiceRequestDetailResponse struct {
 	*ServiceRequest
-	CreatedBy    *User `json:"created_by,omitempty"`
-	UserRequests int   `json:"user_requests_count"`
+	CreatedBy    *User          `json:"created_by,omitempty"`
+	Rating       *ServiceRating `json:"rating,omitempty"`
+	UserRequests int            `json:"user_requests_count"`
 }
 
 // CreateServiceRequestRequest — category is populated automatically from services.category

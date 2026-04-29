@@ -25,9 +25,10 @@ type ServiceRequestHandler struct {
 	pushService   *services.ExpoPushService
 	uploadService *services.UploadService
 	geoService    *services.GeocodingService
+	ratingRepo    *repository.ServiceRatingRepository
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService) *ServiceRequestHandler {
+func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService, ratingRepo *repository.ServiceRatingRepository) *ServiceRequestHandler {
 	return &ServiceRequestHandler{
 		srRepo:        srRepo,
 		userRepo:      userRepo,
@@ -36,6 +37,7 @@ func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userR
 		pushService:   pushService,
 		uploadService: uploadService,
 		geoService:    geoService,
+		ratingRepo:    ratingRepo,
 	}
 }
 
@@ -306,6 +308,10 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 			detail.UserRequests = count
 		}
 	}
+
+	// Fetch rating if exists
+	rating, _ := h.ratingRepo.GetByRequestID(r.Context(), id)
+	detail.Rating = rating
 
 	respondJSON(w, http.StatusOK, detail)
 }

@@ -53,6 +53,14 @@ type PopularService struct {
 	RequestCount int    `json:"request_count"`
 }
 
+type TopRatedService struct {
+	ID           int64   `json:"id"`
+	Title        string  `json:"title"`
+	Category     string  `json:"category"`
+	AverageStars float64 `json:"average_stars"`
+	RatingCount  int     `json:"rating_count"`
+}
+
 type MapLocation struct {
 	ID           int64   `json:"id"`
 	Address      string  `json:"address"`
@@ -72,6 +80,7 @@ type HomeResponse struct {
 	NewRequests     []RecentRequest  `json:"new_requests"`
 	Volume7d        []VolumeStat     `json:"volume_7d"`
 	Alerts          []HomeAlert      `json:"alerts"`
-	PopularServices []PopularService `json:"popular_services"`
-	MapLocations    []MapLocation    `json:"map_locations,omitempty"`
+	PopularServices  []PopularService  `json:"popular_services"`
+	TopRatedServices []TopRatedService `json:"top_rated_services"`
+	MapLocations     []MapLocation     `json:"map_locations,omitempty"`
 }
