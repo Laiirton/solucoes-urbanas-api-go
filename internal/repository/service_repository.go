@@ -107,6 +107,39 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 	return services, nil
 }
 
+func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool) ([]*models.Service, error) {
+	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
+              FROM services WHERE category = $1`
+
+	if onlyActive {
+		query += ` AND is_active = TRUE`
+	}
+
+	query += ` ORDER BY title ASC`
+
+	rows, err := r.db.Query(ctx, query, category)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services by category: %w", err)
+	}
+	defer rows.Close()
+
+	var services []*models.Service
+	for rows.Next() {
+		svc := &models.Service{}
+		if err := rows.Scan(
+			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+			&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan service: %w", err)
+		}
+		services = append(services, svc)
+	}
+	if services == nil {
+		services = []*models.Service{}
+	}
+	return services, nil
+}
+
 func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *models.UpdateServiceRequest) (*models.Service, error) {
 	query := `
 		UPDATE services SET

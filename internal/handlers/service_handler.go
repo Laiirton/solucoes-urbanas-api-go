@@ -35,6 +35,24 @@ func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, services)
 }
 
+// GET /services/category/{category}
+func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.Request) {
+	category := chi.URLParam(r, "category")
+	if category == "" {
+		respondError(w, http.StatusBadRequest, "category is required")
+		return
+	}
+
+	onlyActive := r.URL.Query().Get("all") != "true"
+
+	services, err := h.serviceRepo.ListServicesByCategory(r.Context(), category, onlyActive)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list services by category")
+		return
+	}
+	respondJSON(w, http.StatusOK, services)
+}
+
 // GET /services/{id}
 func (h *ServiceHandler) GetService(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

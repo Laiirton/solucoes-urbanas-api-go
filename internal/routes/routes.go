@@ -75,6 +75,7 @@ func Setup(
 
 		// Public service routes (read-only)
 		r.Get("/services", serviceHandler.ListServices)
+		r.Get("/services/category/{category}", serviceHandler.ListServicesByCategory)
 		r.Get("/services/{id}", serviceHandler.GetService)
 		r.Get("/services/{id}/ratings", ratingHandler.ListRatingsByService)
 		r.Get("/services/{id}/rating-stats", ratingHandler.GetRatingStats)
