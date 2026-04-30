@@ -165,6 +165,35 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 	return svc, nil
 }
 
+func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool) ([]string, error) {
+	query := `SELECT DISTINCT category FROM services`
+
+	if onlyActive {
+		query += ` WHERE is_active = TRUE`
+	}
+
+	query += ` ORDER BY category ASC`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list categories: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			return nil, fmt.Errorf("failed to scan category: %w", err)
+		}
+		categories = append(categories, category)
+	}
+	if categories == nil {
+		categories = []string{}
+	}
+	return categories, nil
+}
+
 func (r *ServiceRepository) DeleteService(ctx context.Context, id int64) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

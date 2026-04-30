@@ -61,6 +61,14 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
     - `search`: busca por texto
     - `page`: número da página (padrão: 1)
     - `limit`: itens por página (padrão: 10)
+- `GET /api/services/categories`
+  - Lista todas as categorias de serviços disponíveis.
+  - Parâmetros de query (opcionais):
+    - `all`: quando `true`, lista categorias de todos os serviços (incluindo inativos)
+  - Resposta JSON:
+    ```json
+    ["Limpeza Urbana", "Saúde", "Educação", "Segurança Pública"]
+    ```
 - `GET /api/services/category/{category}`
   - Retorna todos os serviços pertencentes a uma categoria específica.
   - Parâmetros de query (opcionais):
