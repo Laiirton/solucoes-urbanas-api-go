@@ -306,7 +306,7 @@ func (h *NewsHandler) dispatchNewsPublished(newsID int64, title, summary string)
 			return
 		}
 
-		if err := h.pushService.SendNewsPublished(ctx, tokens, id, t, s); err != nil {
+		if err := h.pushService.SendNewsPublished(ctx, tokens, id, t, s, "default"); err != nil {
 			log.Printf("warning: failed to send news notification for news %d: %v", id, err)
 		}
 	}(newsID, title, summary)

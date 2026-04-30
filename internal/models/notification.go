@@ -41,6 +41,7 @@ type CreateSystemNotificationRequest struct {
 	Body   string          `json:"body"`
 	Type   string          `json:"type,omitempty"`
 	Data   json.RawMessage `json:"data,omitempty"`
+	Sound  string          `json:"sound,omitempty"`
 }
 
 func (r *CreateSystemNotificationRequest) Validate() error {

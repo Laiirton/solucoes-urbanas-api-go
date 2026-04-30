@@ -20,6 +20,7 @@ type ExpoPushMessage struct {
 	To    string         `json:"to"`
 	Title string         `json:"title"`
 	Body  string         `json:"body"`
+	Sound string         `json:"sound,omitempty"`
 	Data  map[string]any `json:"data,omitempty"`
 }
 
@@ -37,7 +38,7 @@ func NewExpoPushService() *ExpoPushService {
 	}
 }
 
-func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string, newsID int64, title, body string) error {
+func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string, newsID int64, title, body, sound string) error {
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -55,6 +56,7 @@ func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string
 				To:    token,
 				Title: title,
 				Body:  body,
+				Sound: sound,
 				Data: map[string]any{
 					"screen": screen,
 				},
@@ -73,7 +75,7 @@ func (s *ExpoPushService) SendNewsPublished(ctx context.Context, tokens []string
 	return nil
 }
 
-func (s *ExpoPushService) SendToUser(ctx context.Context, userTokens []string, title, body string, data map[string]any) error {
+func (s *ExpoPushService) SendToUser(ctx context.Context, userTokens []string, title, body, sound string, data map[string]any) error {
 	if len(userTokens) == 0 {
 		return nil
 	}
@@ -89,6 +91,7 @@ func (s *ExpoPushService) SendToUser(ctx context.Context, userTokens []string, t
 			To:    token,
 			Title: title,
 			Body:  body,
+			Sound: sound,
 			Data:  data,
 		})
 	}

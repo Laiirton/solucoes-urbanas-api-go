@@ -450,7 +450,7 @@ func (h *ServiceRequestHandler) dispatchServiceRequestStatusUpdated(userID *int6
 		title := "Status do chamado atualizado"
 		body := fmt.Sprintf("Seu chamado #%s agora está: %s", protocol, status)
 
-		if err := h.pushService.SendToUser(ctx, tokens, title, body, data); err != nil {
+		if err := h.pushService.SendToUser(ctx, tokens, title, body, "default", data); err != nil {
 			log.Printf("warning: failed to send status update push notification for service request %d: %v", req.ID, err)
 		}
 	}(*userID, sr, newStatus)

@@ -42,7 +42,7 @@ func TestExpoPushService_SendNewsPublished_SendsExpectedPayload(t *testing.T) {
 		endpoint: server.URL,
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), []string{"ExponentPushToken[abc]"}, 123, "Test Title", "Test Summary"); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), []string{"ExponentPushToken[abc]"}, 123, "Test Title", "Test Summary", "default"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestExpoPushService_SendNewsPublished_ChunksTokens(t *testing.T) {
 		tokens[i] = fmt.Sprintf("ExponentPushToken[%03d]", i)
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), tokens, 999, "Batch Title", "Batch Summary"); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), tokens, 999, "Batch Title", "Batch Summary", "default"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestExpoPushService_SendNewsPublished_EmptyTokens(t *testing.T) {
 		endpoint: server.URL,
 	}
 
-	if err := svc.SendNewsPublished(context.Background(), nil, 1, "Empty Title", "Empty Summary"); err != nil {
+	if err := svc.SendNewsPublished(context.Background(), nil, 1, "Empty Title", "Empty Summary", "default"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
