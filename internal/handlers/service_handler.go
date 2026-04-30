@@ -62,7 +62,17 @@ func (h *ServiceHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusInternalServerError, "failed to list categories")
 		return
 	}
-	respondJSON(w, http.StatusOK, categories)
+
+	// Add icons to categories
+	var categoriesWithIcon []models.CategorySummary
+	for _, cat := range categories {
+		categoriesWithIcon = append(categoriesWithIcon, models.CategorySummary{
+			Name: cat,
+			Icon: models.GetCategoryIcon(cat),
+		})
+	}
+
+	respondJSON(w, http.StatusOK, categoriesWithIcon)
 }
 
 // GET /services/{id}
