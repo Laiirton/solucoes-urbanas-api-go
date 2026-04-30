@@ -344,6 +344,7 @@ Todos endpoints dessa seção exigem autenticação JWT.
   - Lista pedidos de serviço do usuário autenticado.
   - Parâmetros de query (opcionais):
     - `search`: busca por texto
+    - `status`: filtra por status (pending, in_progress, completed, cancelled)
     - `all`: quando `true`, lista todos os pedidos (modo administrativo)
     - `page`: número da página (padrão: 1)
     - `limit`: itens por página (padrão: 10)

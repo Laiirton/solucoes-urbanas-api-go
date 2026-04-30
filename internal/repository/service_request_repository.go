@@ -113,7 +113,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
 	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
@@ -126,6 +126,16 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	if search != "" {
 		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR sr.category ILIKE $1 OR u.full_name ILIKE $1)`
 		args = append(args, "%"+search+"%")
+		whereApplied = true
+	}
+
+	if status != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.status = $%d`, len(args)+1)
+		} else {
+			query += ` WHERE sr.status = $1`
+		}
+		args = append(args, status)
 		whereApplied = true
 	}
 
@@ -144,7 +154,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	return r.scanServiceRequests(ctx, query, args...)
 }
 
-func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, status, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
 	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
@@ -156,6 +166,11 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 	if search != "" {
 		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
 		args = append(args, "%"+search+"%")
+	}
+
+	if status != "" {
+		query += fmt.Sprintf(` AND sr.status = $%d`, len(args)+1)
+		args = append(args, status)
 	}
 
 	if categoryFilter != "" {
@@ -735,14 +750,14 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	return &models.HomeResponse{
-		Stats:           stats,
-		Categories:      categories,
-		RecentRequests:  recent,
-		DelayedRequests: delayed,
-		NewRequests:     newReqs,
-		Volume7d:        volume7d,
-		Alerts:          alerts,
-		PopularServices: topServices,
+		Stats:            stats,
+		Categories:       categories,
+		RecentRequests:   recent,
+		DelayedRequests:  delayed,
+		NewRequests:      newReqs,
+		Volume7d:         volume7d,
+		Alerts:           alerts,
+		PopularServices:  topServices,
 		TopRatedServices: topRated,
 	}, nil
 }

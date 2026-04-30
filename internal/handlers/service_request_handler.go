@@ -124,6 +124,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	}
 
 	search := r.URL.Query().Get("search")
+	status := r.URL.Query().Get("status")
 	page, limit := parsePagination(r)
 
 	var categoryFilter string
@@ -134,9 +135,9 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 
 	var list []*models.ServiceRequest
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, categoryFilter, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, categoryFilter, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")
@@ -205,9 +206,9 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 
 	var list []*models.ServiceRequest
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", categoryFilter, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, "", categoryFilter, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")

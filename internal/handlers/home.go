@@ -50,7 +50,7 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp.MapLocations = []models.MapLocation{}
-	list, err := h.srRepo.ListServiceRequests(r.Context(), "", categoryFilter, 1, 1000)
+	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", categoryFilter, 1, 1000)
 	if err == nil {
 		for _, sr := range list {
 			var lat, lon float64
