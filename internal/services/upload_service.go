@@ -25,7 +25,13 @@ var AllowedMIMETypes = map[string]bool{
 	"image/png":       true,
 	"image/webp":      true,
 	"image/gif":       true,
-	"application/pdf": true,
+	"application/pdf":                                                           true,
+	"application/msword":                                                        true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true,
+	"application/vnd.ms-excel":                                                  true,
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         true,
+	"text/plain":                                                                true,
+	"text/csv":                                                                  true,
 }
 
 // AllowedExtensions defines which file extensions are permitted
@@ -36,6 +42,12 @@ var AllowedExtensions = map[string]bool{
 	".webp": true,
 	".gif":  true,
 	".pdf":  true,
+	".doc":  true,
+	".docx": true,
+	".xls":  true,
+	".xlsx": true,
+	".txt":  true,
+	".csv":  true,
 }
 
 // FileUploadError represents a validation error for a specific file

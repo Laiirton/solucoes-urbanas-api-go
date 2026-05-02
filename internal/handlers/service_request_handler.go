@@ -26,9 +26,10 @@ type ServiceRequestHandler struct {
 	uploadService *services.UploadService
 	geoService    *services.GeocodingService
 	ratingRepo    *repository.ServiceRatingRepository
+	attendanceRepo *repository.ServiceAttendanceRepository
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService, ratingRepo *repository.ServiceRatingRepository) *ServiceRequestHandler {
+func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService, ratingRepo *repository.ServiceRatingRepository, attendanceRepo *repository.ServiceAttendanceRepository) *ServiceRequestHandler {
 	return &ServiceRequestHandler{
 		srRepo:        srRepo,
 		userRepo:      userRepo,
@@ -38,6 +39,7 @@ func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userR
 		uploadService: uploadService,
 		geoService:    geoService,
 		ratingRepo:    ratingRepo,
+		attendanceRepo: attendanceRepo,
 	}
 }
 
@@ -314,6 +316,10 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 	rating, _ := h.ratingRepo.GetByRequestID(r.Context(), id)
 	detail.Rating = rating
 
+	// Fetch attendances
+	attendances, _ := h.attendanceRepo.ListByRequestID(r.Context(), id)
+	detail.Attendances = attendances
+
 	respondJSON(w, http.StatusOK, detail)
 }
 
@@ -348,8 +354,8 @@ func (h *ServiceRequestHandler) UpdateServiceRequestStatus(w http.ResponseWriter
 		return
 	}
 
-	h.saveServiceRequestStatusUpdatedNotification(existing.UserID, sr, req.Status)
-	h.dispatchServiceRequestStatusUpdated(existing.UserID, sr, req.Status)
+	h.SaveServiceRequestStatusUpdatedNotification(existing.UserID, sr, req.Status)
+	h.DispatchServiceRequestStatusUpdated(existing.UserID, sr, req.Status)
 
 	respondJSON(w, http.StatusOK, sr)
 }
@@ -382,7 +388,7 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service request deleted successfully"})
 }
 
-func (h *ServiceRequestHandler) saveServiceRequestStatusUpdatedNotification(userID *int64, sr *models.ServiceRequest, newStatus string) {
+func (h *ServiceRequestHandler) SaveServiceRequestStatusUpdatedNotification(userID *int64, sr *models.ServiceRequest, newStatus string) {
 	if h.sysNotifRepo == nil || userID == nil {
 		return
 	}
@@ -416,7 +422,7 @@ func (h *ServiceRequestHandler) saveServiceRequestStatusUpdatedNotification(user
 	}(*userID, sr, newStatus)
 }
 
-func (h *ServiceRequestHandler) dispatchServiceRequestStatusUpdated(userID *int64, sr *models.ServiceRequest, newStatus string) {
+func (h *ServiceRequestHandler) DispatchServiceRequestStatusUpdated(userID *int64, sr *models.ServiceRequest, newStatus string) {
 	if h.pushTokenRepo == nil || h.pushService == nil || userID == nil {
 		return
 	}

@@ -24,6 +24,7 @@ func Setup(
 	sysNotifRepo *repository.SystemNotificationRepository,
 	appConfigRepo *repository.AppConfigRepository,
 	ratingRepo *repository.ServiceRatingRepository,
+	attendanceRepo *repository.ServiceAttendanceRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -48,7 +49,7 @@ func Setup(
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
 	pushService := services.NewExpoPushService()
-	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
@@ -56,6 +57,7 @@ func Setup(
 	teamHandler := handlers.NewTeamHandler(teamRepo)
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
+	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -143,6 +145,10 @@ func Setup(
 				r.Get("/", srHandler.GetServiceRequest)
 				r.Patch("/status", srHandler.UpdateServiceRequestStatus)
 				r.Delete("/", srHandler.DeleteServiceRequest)
+
+				// Attendance (Handling)
+				r.Post("/attendances", attendanceHandler.CreateAttendance)
+				r.Get("/attendances", attendanceHandler.ListAttendances)
 			})
 
 			// Service Ratings

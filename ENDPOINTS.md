@@ -350,6 +350,7 @@ Todos endpoints dessa seção exigem autenticação JWT.
     - `limit`: itens por página (padrão: 10)
 - `GET /api/service-requests/{id}`
   - Retorna um pedido de serviço específico pelo `id`.
+  - Inclui a lista de `attendances` (histórico de atendimentos) realizados no chamado.
 - `PATCH /api/service-requests/{id}/status`
   - Atualiza o status de um pedido de serviço por `id`.
   - Payload JSON:
@@ -361,6 +362,23 @@ Todos endpoints dessa seção exigem autenticação JWT.
     - Status permitidos: `pending`, `in_progress`, `completed`, `cancelled`.
 - `DELETE /api/service-requests/{id}`
   - Exclui um pedido de serviço por `id`.
+
+- `POST /api/service-requests/{id}/attendances`
+  - Registra um novo atendimento (ação realizada) para o pedido de serviço.
+  - Aceita JSON ou `multipart/form-data` (para fotos).
+  - Payload JSON:
+    ```json
+    {
+      "notes": "Equipe no local realizando o reparo",
+      "new_status": "in_progress"
+    }
+    ```
+  - Quando usado `multipart/form-data`:
+    - `notes`: (string) Observações do atendimento
+    - `new_status`: (string) Novo status do chamado (opcional)
+    - `files`: (file[]) Fotos do atendimento
+- `GET /api/service-requests/{id}/attendances`
+  - Lista todo o histórico de atendimentos realizados para um chamado específico.
 
 ## Gestão de Configurações do App (Admin)
 
