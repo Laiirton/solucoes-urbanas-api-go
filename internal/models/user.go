@@ -17,6 +17,7 @@ type User struct {
 	Type            *string    `json:"type,omitempty"`
 	TeamID          *int64     `json:"team_id,omitempty"`
 	Team            *Team      `json:"team,omitempty"`
+	WorkArea        *string    `json:"work_area,omitempty"`
 	ProfileImageURL *string    `json:"profile_image_url,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
@@ -31,6 +32,7 @@ type CreateUserRequest struct {
 	BirthDate       *string `json:"birth_date,omitempty"`
 	Type            *string `json:"type,omitempty"`
 	TeamID          *int64  `json:"team_id,omitempty"`
+	WorkArea        *string `json:"work_area,omitempty"`
 	ProfileImageURL *string `json:"profile_image_url,omitempty"`
 }
 
@@ -72,6 +74,7 @@ type UpdateUserRequest struct {
 	BirthDate       *string `json:"birth_date,omitempty"`
 	Type            *string `json:"type,omitempty"`
 	TeamID          *int64  `json:"team_id,omitempty"`
+	WorkArea        *string `json:"work_area,omitempty"`
 	ProfileImageURL *string `json:"profile_image_url,omitempty"`
 }
 

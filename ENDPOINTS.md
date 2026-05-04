@@ -136,6 +136,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       "birth_date": "01/01/1990",
       "type": "user",
       "team_id": 1,
+      "work_area": "Limpeza Urbana",
       "profile_image_url": "https://.../foto.jpg"  // opcional
     }
     ```
@@ -155,6 +156,7 @@ ROTA DA API que já está funcionando: https://solucoes-urbanas-api-go.onrender.
       "birth_date": "10/05/1995",
       "type": "admin",
       "team_id": 2,
+      "work_area": "Saúde",
       "profile_image_url": "https://.../nova-foto.jpg"
     }
     ```

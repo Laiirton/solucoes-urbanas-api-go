@@ -19,9 +19,9 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error) {
 	query := `
-		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at`
+		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
 
 	var birthDate *time.Time
 	if req.BirthDate != nil {
@@ -36,11 +36,11 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	err := r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
 		req.FullName, req.CPF, birthDate, req.Type,
-		req.TeamID, req.ProfileImageURL,
+		req.TeamID, req.WorkArea, req.ProfileImageURL,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -51,14 +51,14 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 }
 
 func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
-	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at
+	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at
  FROM users WHERE username = $1 OR email = $1`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 
 func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
-		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.profile_image_url, u.created_at, u.updated_at,
+		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.service_category, t.description, t.created_at, t.updated_at
 		FROM users u
 		LEFT JOIN teams t ON u.team_id = t.id
@@ -85,7 +85,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 		&tID, &tName, &tCat, &tDesc, &tCreatedAt, &tUpdatedAt,
 	)
@@ -109,7 +109,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
 	offset := (page - 1) * limit
-	query := `SELECT id, username, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at
+	query := `SELECT id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at
  FROM users`
 
 	var args []interface{}
@@ -145,7 +145,7 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
 			&user.FullName, &user.CPF, &user.BirthDate,
-			&user.Type, &user.TeamID, &user.ProfileImageURL,
+			&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
 			&user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
@@ -182,18 +182,19 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 			birth_date = COALESCE($5, birth_date),
 			type = COALESCE($6, type),
 			team_id = COALESCE($7, team_id),
-			profile_image_url = COALESCE($8, profile_image_url),
+			work_area = COALESCE($8, work_area),
+			profile_image_url = COALESCE($9, profile_image_url),
 			updated_at = NOW()
-		WHERE id = $9
-		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, profile_image_url, created_at, updated_at`
+		WHERE id = $10
+		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query,
-		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, req.ProfileImageURL, id,
+		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, req.WorkArea, req.ProfileImageURL, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
