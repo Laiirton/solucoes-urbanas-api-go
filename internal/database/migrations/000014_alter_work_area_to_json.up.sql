@@ -1,0 +1,1 @@
+ALTER TABLE users ALTER COLUMN work_area TYPE JSON USING work_area::JSON;

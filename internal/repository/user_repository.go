@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -18,6 +19,15 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error) {
+	var workAreaJSON []byte
+	if req.WorkArea != nil {
+		var err error
+		workAreaJSON, err = json.Marshal(req.WorkArea)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal work_area: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
@@ -33,18 +43,25 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	}
 
 	user := &models.User{}
+	var workAreaResult []byte
 	err := r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
 		req.FullName, req.CPF, birthDate, req.Type,
-		req.TeamID, req.WorkArea, req.ProfileImageURL,
+		req.TeamID, workAreaJSON, req.ProfileImageURL,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	if workAreaResult != nil {
+		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+		}
 	}
 
 	return user, nil
@@ -55,14 +72,21 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
  FROM users WHERE username = $1 OR email = $1`
 
 	user := &models.User{}
+	var workAreaResult []byte
 	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	if workAreaResult != nil {
+		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+		}
 	}
 
 	return user, nil
@@ -81,16 +105,23 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	var tName, tCat *string
 	var tDesc *string
 	var tCreatedAt, tUpdatedAt *time.Time
+	var workAreaResult []byte
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 		&tID, &tName, &tCat, &tDesc, &tCreatedAt, &tUpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	if workAreaResult != nil {
+		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+		}
 	}
 
 	if tID != nil {
@@ -142,14 +173,22 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 	var users []*models.User
 	for rows.Next() {
 		user := &models.User{}
+		var workAreaResult []byte
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
 			&user.FullName, &user.CPF, &user.BirthDate,
-			&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
+			&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 			&user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
+
+		if workAreaResult != nil {
+			if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+			}
+		}
+
 		users = append(users, user)
 	}
 
@@ -173,6 +212,15 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 		}
 	}
 
+	var workAreaJSON []byte
+	if req.WorkArea != nil {
+		var err error
+		workAreaJSON, err = json.Marshal(req.WorkArea)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal work_area: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE users SET
 			username = COALESCE($1, username),
@@ -189,16 +237,23 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
 
 	user := &models.User{}
+	var workAreaResult []byte
 	err := r.db.QueryRow(ctx, query,
-		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, req.WorkArea, req.ProfileImageURL, id,
+		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, workAreaJSON, req.ProfileImageURL, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
 		&user.FullName, &user.CPF, &user.BirthDate,
-		&user.Type, &user.TeamID, &user.WorkArea, &user.ProfileImageURL,
+		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	if workAreaResult != nil {
+		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+		}
 	}
 
 	return user, nil

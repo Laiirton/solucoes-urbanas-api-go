@@ -17,23 +17,23 @@ type User struct {
 	Type            *string    `json:"type,omitempty"`
 	TeamID          *int64     `json:"team_id,omitempty"`
 	Team            *Team      `json:"team,omitempty"`
-	WorkArea        *string    `json:"work_area,omitempty"`
+	WorkArea        []string   `json:"work_area,omitempty"`
 	ProfileImageURL *string    `json:"profile_image_url,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type CreateUserRequest struct {
-	Username        string  `json:"username"`
-	Password        string  `json:"password"`
-	Email           string  `json:"email"`
-	FullName        *string `json:"full_name,omitempty"`
-	CPF             *string `json:"cpf,omitempty"`
-	BirthDate       *string `json:"birth_date,omitempty"`
-	Type            *string `json:"type,omitempty"`
-	TeamID          *int64  `json:"team_id,omitempty"`
-	WorkArea        *string `json:"work_area,omitempty"`
-	ProfileImageURL *string `json:"profile_image_url,omitempty"`
+	Username        string   `json:"username"`
+	Password        string   `json:"password"`
+	Email           string   `json:"email"`
+	FullName        *string  `json:"full_name,omitempty"`
+	CPF             *string  `json:"cpf,omitempty"`
+	BirthDate       *string  `json:"birth_date,omitempty"`
+	Type            *string  `json:"type,omitempty"`
+	TeamID          *int64   `json:"team_id,omitempty"`
+	WorkArea        []string `json:"work_area,omitempty"`
+	ProfileImageURL *string  `json:"profile_image_url,omitempty"`
 }
 
 func (r *CreateUserRequest) Validate() error {
@@ -67,15 +67,15 @@ func (r *CreateUserRequest) Validate() error {
 }
 
 type UpdateUserRequest struct {
-	Username        *string `json:"username,omitempty"`
-	Email           *string `json:"email,omitempty"`
-	FullName        *string `json:"full_name,omitempty"`
-	CPF             *string `json:"cpf,omitempty"`
-	BirthDate       *string `json:"birth_date,omitempty"`
-	Type            *string `json:"type,omitempty"`
-	TeamID          *int64  `json:"team_id,omitempty"`
-	WorkArea        *string `json:"work_area,omitempty"`
-	ProfileImageURL *string `json:"profile_image_url,omitempty"`
+	Username        *string  `json:"username,omitempty"`
+	Email           *string  `json:"email,omitempty"`
+	FullName        *string  `json:"full_name,omitempty"`
+	CPF             *string  `json:"cpf,omitempty"`
+	BirthDate       *string  `json:"birth_date,omitempty"`
+	Type            *string  `json:"type,omitempty"`
+	TeamID          *int64   `json:"team_id,omitempty"`
+	WorkArea        []string `json:"work_area,omitempty"`
+	ProfileImageURL *string  `json:"profile_image_url,omitempty"`
 }
 
 type LoginRequest struct {
