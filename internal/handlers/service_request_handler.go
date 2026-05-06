@@ -29,6 +29,13 @@ type ServiceRequestHandler struct {
 	attendanceRepo *repository.ServiceAttendanceRepository
 }
 
+var statusLabels = map[string]string{
+	"pending":     "Pendente",
+	"in_progress": "Em andamento",
+	"completed":   "Concluído",
+	"cancelled":   "Cancelado",
+}
+
 func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService, ratingRepo *repository.ServiceRatingRepository, attendanceRepo *repository.ServiceAttendanceRepository) *ServiceRequestHandler {
 	return &ServiceRequestHandler{
 		srRepo:        srRepo,
@@ -412,7 +419,7 @@ func (h *ServiceRequestHandler) SaveServiceRequestStatusUpdatedNotification(user
 		_, err := h.sysNotifRepo.Create(ctx, &models.SystemNotification{
 			UserID: &uid,
 			Title:  "Status do chamado atualizado",
-			Body:   fmt.Sprintf("Seu chamado #%s agora está: %s", protocol, status),
+			Body:   fmt.Sprintf("Seu chamado #%s agora está: %s", protocol, statusLabels[status]),
 			Type:   "service_request",
 			Data:   data,
 		})
@@ -454,7 +461,7 @@ func (h *ServiceRequestHandler) DispatchServiceRequestStatusUpdated(userID *int6
 		}
 
 		title := "Status do chamado atualizado"
-		body := fmt.Sprintf("Seu chamado #%s agora está: %s", protocol, status)
+		body := fmt.Sprintf("Seu chamado #%s agora está: %s", protocol, statusLabels[status])
 
 		if err := h.pushService.SendToUser(ctx, tokens, title, body, "default", data); err != nil {
 			log.Printf("warning: failed to send status update push notification for service request %d: %v", req.ID, err)
