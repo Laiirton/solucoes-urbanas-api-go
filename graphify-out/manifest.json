@@ -1,0 +1,254 @@
+{
+  "E:\\git\\solucoes-urbanas-api-go\\cmd\\api\\main.go": {
+    "mtime": 1777748090.746984,
+    "hash": "af60fdeabcf7a3a1cae53bfba468b299"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\config\\config.go": {
+    "mtime": 1776803354.4991062,
+    "hash": "a6c378c7a2f3efbd86eec41687f505d2"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\database.go": {
+    "mtime": 1774556539.1967473,
+    "hash": "74a9184674e6302f6600e84c1bd79f63"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000001_create_users_table.up.sql": {
+    "mtime": 1774323254.4535844,
+    "hash": "7ee4ff82dd542d2414cedb20ffa6f895"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000002_create_services_table.up.sql": {
+    "mtime": 1775532971.1830637,
+    "hash": "77cec9a80663a913b6628dd5abae48e9"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000003_create_service_requests_table.up.sql": {
+    "mtime": 1775530882.7779055,
+    "hash": "5c72dee4a5e69a863057ee6fbcb36b72"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000004_create_news_table.up.sql": {
+    "mtime": 1774557706.0530536,
+    "hash": "a0748cd22df477f41d577395915df3f4"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000005_update_news_table.up.sql": {
+    "mtime": 1776497788.7851665,
+    "hash": "81cbb2bbc8a8ced9e0f6c1f28b850894"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000006_create_teams_table.down.sql": {
+    "mtime": 1776534869.1891549,
+    "hash": "a97913a4c130dc0b3a4b93dc204d5570"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000006_create_teams_table.up.sql": {
+    "mtime": 1776534867.1744053,
+    "hash": "b6f02e5cd6f9dde1ff9e2ea74973b32f"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000007_add_profile_image_to_users.up.sql": {
+    "mtime": 1776793229.9887822,
+    "hash": "ff2593d6f8564c213a7d76a4e39207bb"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000009_create_system_notifications_table.up.sql": {
+    "mtime": 1777073334.4136508,
+    "hash": "84c5b77f37859ad42bcc0738ca1bb658"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000010_create_app_configs_table.up.sql": {
+    "mtime": 1777315962.4895947,
+    "hash": "e0c1e9f23f81645475765bfa04fd7934"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000011_create_service_ratings_table.up.sql": {
+    "mtime": 1777434330.3489118,
+    "hash": "31b7a991dea56afb8162a2b1dff9c5f2"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000012_create_service_attendances_table.up.sql": {
+    "mtime": 1777748053.4762347,
+    "hash": "e6c3a6f5eabe484066f58115b2e36ab9"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000013_add_work_area_to_users.up.sql": {
+    "mtime": 1777921627.7178128,
+    "hash": "9d81dab1b106c2c6fd3ee97f545e375b"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\database\\migrations\\000014_alter_work_area_to_json.up.sql": {
+    "mtime": 1777921627.7063835,
+    "hash": "d972814f3f532c263d9bca782f2c100d"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\app_config_handler.go": {
+    "mtime": 1777326704.229124,
+    "hash": "928de7aea433cd51c275585a0272cceb"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\auth_handler.go": {
+    "mtime": 1777155050.4459896,
+    "hash": "660333878f96c0df29a025050a31b354"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\geolocation.go": {
+    "mtime": 1774556539.198314,
+    "hash": "f9870898608126f358c3906b9555a7fa"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\helpers.go": {
+    "mtime": 1775545656.8109555,
+    "hash": "de695183572e200cb4d9424427d72cfa"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\home.go": {
+    "mtime": 1777533006.3102188,
+    "hash": "91efddb9e1a88f7b4f3943c0f2edd5e8"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\news_handler.go": {
+    "mtime": 1777580308.8085644,
+    "hash": "3fab5171cc2db41868aadbe2641b5baa"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\notification_handler.go": {
+    "mtime": 1777140484.726074,
+    "hash": "77d294486de3b05eb6e6050d503d2e9e"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\service_attendance_handler.go": {
+    "mtime": 1777751244.8720598,
+    "hash": "72af58fce0baa5a44c2110eba0b421b0"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\service_handler.go": {
+    "mtime": 1777517455.2288918,
+    "hash": "a77a2176bac55128fabd4d27f538ecd1"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\service_rating_handler.go": {
+    "mtime": 1777434353.4969804,
+    "hash": "18193cc113afde356e098f8e063e5944"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\service_request_handler.go": {
+    "mtime": 1778092463.3536718,
+    "hash": "d9b3a5fed20be3c16bb16a9218e653fd"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\team_handler.go": {
+    "mtime": 1776534117.1786754,
+    "hash": "08a15731d9bd5f436282c1e5e81ef6ca"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\handlers\\user_handler.go": {
+    "mtime": 1777532949.1299112,
+    "hash": "f48451cef3b7a5588e662c4b3493c3df"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\middleware\\auth.go": {
+    "mtime": 1774556539.2009034,
+    "hash": "3679e12bbe5f731ceb80cf1acb2373fe"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\app_config.go": {
+    "mtime": 1777326714.9669063,
+    "hash": "2684806a50ff7c2f359be6aac084440c"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\home.go": {
+    "mtime": 1777433666.2943215,
+    "hash": "a5754053fa998f48450e23795b5f4500"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\news.go": {
+    "mtime": 1776803775.4067407,
+    "hash": "327a307b5cdac255130ed6708d5d645a"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\notification.go": {
+    "mtime": 1777580284.4746833,
+    "hash": "0c055eb40127e3c87ab4f5e61662c8ad"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\service.go": {
+    "mtime": 1777433641.1253364,
+    "hash": "6f479af535c3c55ed8310d6d7c4bbbec"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\service_attendance.go": {
+    "mtime": 1777748058.4548314,
+    "hash": "cbf511b8e62ea4eeb4f297f9d7e74f3b"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\service_icons.go": {
+    "mtime": 1777316452.7002175,
+    "hash": "f7be3e3ce891144cce5906730a92800c"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\service_rating.go": {
+    "mtime": 1777434337.1664405,
+    "hash": "e74f60e9ccb7267b2119061db4142502"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\service_request.go": {
+    "mtime": 1777748103.295484,
+    "hash": "cdb933fc0fcad47f8bfcea15f92bb0b7"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\team.go": {
+    "mtime": 1776534057.0377822,
+    "hash": "c824f3c5888b8c7ada0f1214313fbfab"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\models\\user.go": {
+    "mtime": 1777921532.1996598,
+    "hash": "dbb9e4f658c0b16e76bc887bf4efc632"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\app_config_repository.go": {
+    "mtime": 1777318478.7727652,
+    "hash": "560c9bfe66a2470454a20f5111d65337"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\news_repository.go": {
+    "mtime": 1776803905.9993482,
+    "hash": "6c18f34453cbfae7c2dbb9c0e714b5b6"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\notification_repository.go": {
+    "mtime": 1777098414.7502837,
+    "hash": "0e8f43fccf34526223e3ea502911abf3"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\service_attendance_repository.go": {
+    "mtime": 1777748869.8448133,
+    "hash": "e116f8b5570cf503038e002506c95f6b"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\service_rating_repository.go": {
+    "mtime": 1777434346.5775206,
+    "hash": "02ecbb6f39642520e6c65ce8101b17f6"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\service_repository.go": {
+    "mtime": 1777516411.0169668,
+    "hash": "8456b976e441e3e6f82f02e2caeaa94d"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\service_request_repository.go": {
+    "mtime": 1777532933.2499921,
+    "hash": "4cab0488c673fc31c29bc0bfd9293ad6"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\system_notification_repository.go": {
+    "mtime": 1777073334.422651,
+    "hash": "0deb13818d75be8040a8dc9de86b1124"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\team_repository.go": {
+    "mtime": 1776534115.1623285,
+    "hash": "d312f93247b573f05d10f75e5f25b2ce"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\repository\\user_repository.go": {
+    "mtime": 1777921559.7305756,
+    "hash": "b011e6daacdc412dd4759a9c8c59b80c"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\routes\\routes.go": {
+    "mtime": 1777751244.87366,
+    "hash": "2e9cc952667a0a9fd6a4a970b521ff8d"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\expo_push_service.go": {
+    "mtime": 1777580297.436051,
+    "hash": "3e8ca42d270ebec4c6818c4de0b5746f"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\expo_push_service_test.go": {
+    "mtime": 1777580327.2978292,
+    "hash": "e21e752ef8c2210a798116298acd5704"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\geocoding_service.go": {
+    "mtime": 1776889718.1543238,
+    "hash": "665bdbd72833128b36416ba3f2026397"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\storage.go": {
+    "mtime": 1777073334.4236498,
+    "hash": "fb2b38afb47dc24aa15d966e18622943"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\storage_test.go": {
+    "mtime": 1776396950.71747,
+    "hash": "86f939e03de772338cecd5289961b6f0"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\upload_service.go": {
+    "mtime": 1777751077.2619884,
+    "hash": "10bd45b2a9218e131c9f1b979921473d"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\internal\\services\\upload_service_test.go": {
+    "mtime": 1777073334.424651,
+    "hash": "7dec79ac2080893501c5964b72367864"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\docker-compose.yml": {
+    "mtime": 1774323254.4525762,
+    "hash": "b855b874fce6f6c79974b8f427e40981"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\ENDPOINTS.md": {
+    "mtime": 1777921446.1204076,
+    "hash": "a057f4f125275e287c61c580f9d665b2"
+  },
+  "E:\\git\\solucoes-urbanas-api-go\\PROFILE_IMAGE_UPLOAD.md": {
+    "mtime": 1776793229.9887822,
+    "hash": "e1d43eba74ab8c517a2fd78d81252300"
+  }
+}
