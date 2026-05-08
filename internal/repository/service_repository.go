@@ -127,17 +127,25 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 	return services, nil
 }
 
-func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool) ([]*models.Service, error) {
+func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool, allowedServices []int64) ([]*models.Service, error) {
 	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
               FROM services WHERE category = $1`
+
+	var args []interface{}
+	args = append(args, category)
 
 	if onlyActive {
 		query += ` AND is_active = TRUE`
 	}
 
+	if len(allowedServices) > 0 {
+		query += fmt.Sprintf(` AND id = ANY($%d)`, len(args)+1)
+		args = append(args, allowedServices)
+	}
+
 	query += ` ORDER BY title ASC`
 
-	rows, err := r.db.Query(ctx, query, category)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list services by category: %w", err)
 	}
