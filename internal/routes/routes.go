@@ -58,17 +58,19 @@ func Setup(
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
-	// Health check
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":    "ok",
-			"timestamp": time.Now().UTC(),
-		})
-	})
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
+
+		// Health check
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":    "ok",
+				"timestamp": time.Now().UTC(),
+			})
+		})
+
 		// Public auth routes
 		r.Post("/auth/login", authHandler.Login)
 
