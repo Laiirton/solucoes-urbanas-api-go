@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -55,6 +56,14 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err := req.Validate(); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Generate automatic password if not provided: CPF + birth date (digits only)
+	if req.Password == "" {
+		nonDigits := regexp.MustCompile("[^0-9]")
+		cleanCPF := nonDigits.ReplaceAllString(*req.CPF, "")
+		cleanBirthDate := nonDigits.ReplaceAllString(*req.BirthDate, "")
+		req.Password = cleanCPF + cleanBirthDate
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)

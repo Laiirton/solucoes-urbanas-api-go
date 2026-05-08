@@ -25,7 +25,7 @@ type User struct {
 
 type CreateUserRequest struct {
 	Username        string   `json:"username"`
-	Password        string   `json:"password"`
+	Password        string   `json:"password,omitempty"`
 	Email           string   `json:"email"`
 	FullName        *string  `json:"full_name,omitempty"`
 	CPF             *string  `json:"cpf,omitempty"`
@@ -43,10 +43,6 @@ func (r *CreateUserRequest) Validate() error {
 	if r.Email == "" {
 		return fmt.Errorf("email is required")
 	}
-	if r.Password == "" {
-		return fmt.Errorf("password is required")
-	}
-
 	if r.CPF == nil || *r.CPF == "" {
 		return fmt.Errorf("cpf is required")
 	}
