@@ -60,7 +60,7 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 	return svc, nil
 }
 
-func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int) ([]*models.Service, error) {
+func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string) ([]*models.Service, error) {
 	offset := (page - 1) * limit
 	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
               FROM services`
@@ -70,6 +70,16 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 	if onlyActive {
 		query += ` WHERE is_active = TRUE`
 		whereApplied = true
+	}
+
+	if len(allowedCategories) > 0 {
+		if whereApplied {
+			query += fmt.Sprintf(` AND category = ANY($%d)`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE category = ANY($%d)`, len(args)+1)
+		}
+		whereApplied = true
+		args = append(args, allowedCategories)
 	}
 
 	if search != "" {
@@ -165,16 +175,24 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 	return svc, nil
 }
 
-func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool) ([]string, error) {
+func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool, allowedCategories []string) ([]string, error) {
 	query := `SELECT DISTINCT category FROM services`
 
+	var args []interface{}
 	if onlyActive {
 		query += ` WHERE is_active = TRUE`
+		if len(allowedCategories) > 0 {
+			query += fmt.Sprintf(` AND category = ANY($%d)`, len(args)+1)
+			args = append(args, allowedCategories)
+		}
+	} else if len(allowedCategories) > 0 {
+		query += fmt.Sprintf(` WHERE category = ANY($%d)`, len(args)+1)
+		args = append(args, allowedCategories)
 	}
 
 	query += ` ORDER BY category ASC`
 
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list categories: %w", err)
 	}

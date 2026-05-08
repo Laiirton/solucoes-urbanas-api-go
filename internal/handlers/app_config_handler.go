@@ -50,6 +50,18 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 		featuredCategories = []models.CategorySummary{}
 	}
 
+	// 5. Get Mobile Categories
+	mobileCategories, _ := h.repo.GetMobileCategories(ctx)
+	if mobileCategories == nil {
+		mobileCategories = []string{}
+	}
+
+	// 6. Get Mobile Services
+	mobileServices, _ := h.repo.GetMobileServices(ctx)
+	if mobileServices == nil {
+		mobileServices = []int64{}
+	}
+
 	// Build the response
 	response := models.MobileHomeResponse{
 		LogoURL: logoURL,
@@ -66,6 +78,8 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 				Data:  featuredServices,
 			},
 		},
+		MobileCategories: mobileCategories,
+		MobileServices:   mobileServices,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

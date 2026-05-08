@@ -128,3 +128,19 @@ func (r *AppConfigRepository) DeleteBanner(ctx context.Context, id int64) error 
 	_, err := r.db.Exec(ctx, "DELETE FROM app_banners WHERE id = $1", id)
 	return err
 }
+
+func (r *AppConfigRepository) GetMobileCategories(ctx context.Context) ([]string, error) {
+	var categories []string
+	if err := r.GetSetting(ctx, "mobile_categories", &categories); err != nil {
+		return nil, nil
+	}
+	return categories, nil
+}
+
+func (r *AppConfigRepository) GetMobileServices(ctx context.Context) ([]int64, error) {
+	var services []int64
+	if err := r.GetSetting(ctx, "mobile_services", &services); err != nil {
+		return nil, nil
+	}
+	return services, nil
+}

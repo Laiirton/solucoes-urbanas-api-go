@@ -12,13 +12,26 @@ import (
 )
 
 type ServiceHandler struct {
-	serviceRepo *repository.ServiceRepository
-	srRepo      *repository.ServiceRequestRepository
-	ratingRepo  *repository.ServiceRatingRepository
+	serviceRepo   *repository.ServiceRepository
+	srRepo        *repository.ServiceRequestRepository
+	ratingRepo    *repository.ServiceRatingRepository
+	appConfigRepo *repository.AppConfigRepository
 }
 
-func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository) *ServiceHandler {
-	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo, ratingRepo: ratingRepo}
+func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository, appConfigRepo *repository.AppConfigRepository) *ServiceHandler {
+	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo, ratingRepo: ratingRepo, appConfigRepo: appConfigRepo}
+}
+
+func (h *ServiceHandler) getAllowedCategories(r *http.Request) []string {
+	if h.appConfigRepo == nil {
+		return nil
+	}
+	showAll := r.URL.Query().Get("all") == "true"
+	if showAll {
+		return nil
+	}
+	categories, _ := h.appConfigRepo.GetMobileCategories(r.Context())
+	return categories
 }
 
 // GET /services
@@ -27,7 +40,7 @@ func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
-	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit)
+	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit, h.getAllowedCategories(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list services")
 		return
@@ -41,6 +54,21 @@ func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.R
 	if category == "" {
 		respondError(w, http.StatusBadRequest, "category is required")
 		return
+	}
+
+	allowed := h.getAllowedCategories(r)
+	if len(allowed) > 0 {
+		found := false
+		for _, c := range allowed {
+			if c == category {
+				found = true
+				break
+			}
+		}
+		if !found {
+			respondError(w, http.StatusNotFound, "category not available")
+			return
+		}
 	}
 
 	onlyActive := r.URL.Query().Get("all") != "true"
@@ -57,7 +85,7 @@ func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.R
 func (h *ServiceHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
 
-	categories, err := h.serviceRepo.ListCategories(r.Context(), onlyActive)
+	categories, err := h.serviceRepo.ListCategories(r.Context(), onlyActive, h.getAllowedCategories(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list categories")
 		return
