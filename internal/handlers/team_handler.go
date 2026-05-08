@@ -3,17 +3,25 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
 
 type TeamHandler struct {
 	teamRepo *repository.TeamRepository
+	userRepo *repository.UserRepository
+	srRepo   *repository.ServiceRequestRepository
 }
 
-func NewTeamHandler(teamRepo *repository.TeamRepository) *TeamHandler {
-	return &TeamHandler{teamRepo: teamRepo}
+func NewTeamHandler(teamRepo *repository.TeamRepository, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository) *TeamHandler {
+	return &TeamHandler{
+		teamRepo: teamRepo,
+		userRepo: userRepo,
+		srRepo:   srRepo,
+	}
 }
 
 // GET /teams
@@ -38,8 +46,8 @@ func (h *TeamHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.ServiceCategory == "" {
-		respondError(w, http.StatusBadRequest, "name and service_category are required")
+	if req.Name == "" || req.RegionID == 0 {
+		respondError(w, http.StatusBadRequest, "name and region_id are required")
 		return
 	}
 
@@ -106,4 +114,90 @@ func (h *TeamHandler) DeleteTeam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "team deleted successfully"})
+}
+
+// GET /teams/{id}/members
+func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid team id")
+		return
+	}
+
+	members, err := h.teamRepo.ListMembers(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list team members")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, members)
+}
+
+// POST /teams/{id}/members
+func (h *TeamHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid team id")
+		return
+	}
+
+	var req struct {
+		UserID int64 `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.UserID == 0 {
+		respondError(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+
+	if err := h.teamRepo.AddMember(r.Context(), id, req.UserID); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "member added successfully"})
+}
+
+// DELETE /teams/{id}/members/{userId}
+func (h *TeamHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
+	teamID, err := parseID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid team id")
+		return
+	}
+
+	userIDStr := chi.URLParam(r, "userId")
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	if err := h.teamRepo.RemoveMember(r.Context(), teamID, userID); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "member removed successfully"})
+}
+
+// GET /teams/{id}/stats
+func (h *TeamHandler) GetTeamDashboard(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid team id")
+		return
+	}
+
+	stats, err := h.teamRepo.GetTeamStats(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "team not found")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, stats)
 }

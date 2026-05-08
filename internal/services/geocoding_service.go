@@ -22,6 +22,7 @@ type GeocodingResult struct {
 	Latitude    float64 `json:"latitude"`
 	Longitude   float64 `json:"longitude"`
 	DisplayName string  `json:"display_name"`
+	Bairro      string  `json:"bairro"`
 	Found       bool    `json:"found"`
 }
 
@@ -40,8 +41,8 @@ func NewGeocodingService() *GeocodingService {
 	}
 }
 
-// GeocodeAddress busca coordenadas geográficas baseadas no endereço
-// Retorna as coordenadas padrão da cidade se não encontrar o endereço
+// GeocodeAddress busca coordenadas geográficas baseadas no endereço.
+// Retorna as coordenadas padrão da cidade se não encontrar o endereço.
 func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, error) {
 	if address == "" {
 		return &GeocodingResult{
@@ -57,14 +58,12 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	}
 
 	q := reqURL.Query()
-	// Adicionar cidade e estado na query para restringir à cidade padrão
 	fullAddress := address + ", " + DefaultCity + " - " + DefaultState + ", " + DefaultCountry
 	q.Add("q", fullAddress)
 	q.Add("format", "json")
 	q.Add("limit", "1")
 	q.Add("addressdetails", "1")
 	q.Add("countrycodes", "br")
-	// Viewbox prioriza resultados na área de Cacimbas (sem bounded=1 para não restringir demais)
 	q.Add("viewbox", "-38.0000,-7.0000,-37.6000,-7.4000")
 	reqURL.RawQuery = q.Encode()
 
@@ -118,7 +117,6 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	lat, _ := strconv.ParseFloat(latStr, 64)
 	lon, _ := strconv.ParseFloat(lonStr, 64)
 
-	// Se não conseguir parsear, usa o padrão
 	if lat == 0 && lon == 0 {
 		return &GeocodingResult{
 			Latitude:  DefaultLatitude,
@@ -127,10 +125,39 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 		}, nil
 	}
 
+	// Extract bairro from address details
+	bairro := extractBairroFromNominatim(first)
+
 	return &GeocodingResult{
 		Latitude:    lat,
 		Longitude:   lon,
 		DisplayName: displayName,
+		Bairro:      bairro,
 		Found:       true,
 	}, nil
+}
+
+// extractBairroFromNominatim tenta extrair o nome do bairro do objeto de
+// detalhes de endereço retornado pelo Nominatim (addressdetails=1).
+// A ordem de precedência reflete a hierarquia do OpenStreetMap no Brasil:
+//
+//	suburb > neighbourhood > city_district > village > town > municipality
+func extractBairroFromNominatim(result map[string]interface{}) string {
+	rawAddress, ok := result["address"]
+	if !ok {
+		return ""
+	}
+
+	address, ok := rawAddress.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	for _, key := range []string{"suburb", "neighbourhood", "city_district", "village", "town", "municipality"} {
+		if val, ok := address[key].(string); ok && val != "" {
+			return val
+		}
+	}
+
+	return ""
 }

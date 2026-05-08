@@ -18,14 +18,16 @@ import (
 )
 
 type ServiceRequestHandler struct {
-	srRepo        *repository.ServiceRequestRepository
-	userRepo      *repository.UserRepository
-	sysNotifRepo  *repository.SystemNotificationRepository
-	pushTokenRepo *repository.PushTokenRepository
-	pushService   *services.ExpoPushService
-	uploadService *services.UploadService
-	geoService    *services.GeocodingService
-	ratingRepo    *repository.ServiceRatingRepository
+	srRepo         *repository.ServiceRequestRepository
+	userRepo       *repository.UserRepository
+	regionRepo     *repository.RegionRepository
+	teamRepo       *repository.TeamRepository
+	sysNotifRepo   *repository.SystemNotificationRepository
+	pushTokenRepo  *repository.PushTokenRepository
+	pushService    *services.ExpoPushService
+	uploadService  *services.UploadService
+	geoService     *services.GeocodingService
+	ratingRepo     *repository.ServiceRatingRepository
 	attendanceRepo *repository.ServiceAttendanceRepository
 }
 
@@ -36,16 +38,30 @@ var statusLabels = map[string]string{
 	"cancelled":   "Cancelado",
 }
 
-func NewServiceRequestHandler(srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, sysNotifRepo *repository.SystemNotificationRepository, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, uploadService *services.UploadService, geoService *services.GeocodingService, ratingRepo *repository.ServiceRatingRepository, attendanceRepo *repository.ServiceAttendanceRepository) *ServiceRequestHandler {
+func NewServiceRequestHandler(
+	srRepo *repository.ServiceRequestRepository,
+	userRepo *repository.UserRepository,
+	regionRepo *repository.RegionRepository,
+	teamRepo *repository.TeamRepository,
+	sysNotifRepo *repository.SystemNotificationRepository,
+	pushTokenRepo *repository.PushTokenRepository,
+	pushService *services.ExpoPushService,
+	uploadService *services.UploadService,
+	geoService *services.GeocodingService,
+	ratingRepo *repository.ServiceRatingRepository,
+	attendanceRepo *repository.ServiceAttendanceRepository,
+) *ServiceRequestHandler {
 	return &ServiceRequestHandler{
-		srRepo:        srRepo,
-		userRepo:      userRepo,
-		sysNotifRepo:  sysNotifRepo,
-		pushTokenRepo: pushTokenRepo,
-		pushService:   pushService,
-		uploadService: uploadService,
-		geoService:    geoService,
-		ratingRepo:    ratingRepo,
+		srRepo:         srRepo,
+		userRepo:       userRepo,
+		regionRepo:     regionRepo,
+		teamRepo:       teamRepo,
+		sysNotifRepo:   sysNotifRepo,
+		pushTokenRepo:  pushTokenRepo,
+		pushService:    pushService,
+		uploadService:  uploadService,
+		geoService:     geoService,
+		ratingRepo:     ratingRepo,
 		attendanceRepo: attendanceRepo,
 	}
 }
@@ -111,7 +127,35 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 		req.RequestData = []byte("{}")
 	}
 
-	sr, err := h.srRepo.CreateServiceRequest(r.Context(), &userID, &req)
+	// Try to determine region and team via geocoding + bairro matching
+	var regionID, teamID *int64
+	var geoLat, geoLon *float64
+	var geoAddress *string
+
+	address := extractAddressFromRequestData(req.RequestData)
+	if address != "" {
+		geoResult, err := h.geoService.GeocodeAddress(address)
+		if err == nil && geoResult.Found {
+			geoLat = &geoResult.Latitude
+			geoLon = &geoResult.Longitude
+			geoAddress = &geoResult.DisplayName
+
+			// Try to match bairro to a region
+			if geoResult.Bairro != "" {
+				region, err := h.regionRepo.FindByNeighborhood(r.Context(), geoResult.Bairro)
+				if err == nil {
+					regionID = &region.ID
+					// Look for a team assigned to this region
+					team, err := h.teamRepo.GetTeamByRegion(r.Context(), region.ID)
+					if err == nil {
+						teamID = &team.ID
+					}
+				}
+			}
+		}
+	}
+
+	sr, err := h.srRepo.CreateServiceRequest(r.Context(), &userID, &req, regionID, teamID, geoLat, geoLon, geoAddress)
 	if err != nil {
 		// Rollback uploaded files if DB insert fails
 		if urls := services.ParseAttachmentURLs(req.Attachments); len(urls) > 0 {
@@ -136,17 +180,14 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	status := r.URL.Query().Get("status")
 	page, limit := parsePagination(r)
 
-	var categoryFilter string
-	user, err := h.userRepo.GetUserByID(r.Context(), userID)
-	if err == nil && user.Type != nil && *user.Type == "admin" && user.Team != nil {
-		categoryFilter = user.Team.ServiceCategory
-	}
+	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
 
 	var list []*models.ServiceRequest
+	var err error
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, regionFilter, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, regionFilter, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")
@@ -207,17 +248,14 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
-	var categoryFilter string
-	user, err := h.userRepo.GetUserByID(r.Context(), userID)
-	if err == nil && user.Type != nil && *user.Type == "admin" && user.Team != nil {
-		categoryFilter = user.Team.ServiceCategory
-	}
+	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
 
 	var list []*models.ServiceRequest
+	var err error
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", regionFilter, page, limit)
 	} else {
-		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, "", categoryFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, "", regionFilter, page, limit)
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list service requests")

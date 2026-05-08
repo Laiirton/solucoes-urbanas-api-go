@@ -20,8 +20,8 @@ func NewServiceRequestRepository(db *pgxpool.Pool) *ServiceRequestRepository {
 	return &ServiceRequestRepository{db: db}
 }
 
-func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, userID *int64, req *models.CreateServiceRequestRequest) (*models.ServiceRequest, error) {
-	// Fetch category and title from the referenced service
+func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, userID *int64, req *models.CreateServiceRequestRequest, regionID, teamID *int64, latitude, longitude *float64, geocodedAddress *string) (*models.ServiceRequest, error) {
+	// Fetch category from the referenced service
 	var serviceCategory string
 	err := r.db.QueryRow(ctx,
 		`SELECT category FROM services WHERE id = $1 AND is_active = TRUE`,
@@ -31,28 +31,38 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("service not found or inactive: %w", err)
 	}
 
-	// Insert without protocol_number first to get the ID
 	insertQuery := `
 		INSERT INTO service_requests
-			(user_id, service_id, service_title, category, request_data, attachments, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), NOW())
+			(user_id, service_id, service_title, category, request_data, attachments, status, team_id, region_id, latitude, longitude, geocoded_address, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, NOW(), NOW())
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
-		          request_data, attachments, status, latitude, longitude, geocoded_address, created_at, updated_at`
+		          request_data, attachments, status, latitude, longitude, geocoded_address,
+		          team_id, region_id, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err = r.db.QueryRow(ctx, insertQuery,
 		userID, req.ServiceID, req.ServiceTitle, serviceCategory,
-		req.RequestData, req.Attachments,
+		req.RequestData, req.Attachments, teamID, regionID,
+		latitude, longitude, geocodedAddress,
 	).Scan(
 		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+		&sr.TeamID, &sr.RegionID, &sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
-	// Fetch the full name
+	// Fetch team name and region name
+	if sr.TeamID != nil {
+		r.db.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, *sr.TeamID).Scan(&sr.TeamName)
+	}
+	if sr.RegionID != nil {
+		r.db.QueryRow(ctx, `SELECT name FROM regions WHERE id = $1`, *sr.RegionID).Scan(&sr.RegionName)
+	}
+
+	// Fetch user name
 	if userID != nil {
 		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *userID).Scan(&sr.UserName)
 	}
@@ -63,7 +73,6 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 	}
 
 	// Generate a unique 8-digit random protocol number
-	// We use a retry loop to handle potential collisions in the unique constraint
 	var finalProtocol string
 	var lastErr error
 	for i := 0; i < 5; i++ {
@@ -89,23 +98,31 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 }
 
 func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id int64) (*models.ServiceRequest, error) {
-	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id
 	          WHERE sr.id = $1`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+		&sr.TeamID, &sr.TeamName,
+		&sr.RegionID, &sr.RegionName,
+		&sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("service request not found: %w", err)
 	}
 
-	// Set icon based on service ID
 	if sr.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
 	}
@@ -113,12 +130,18 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
-	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at
 	          FROM service_requests sr
-	          LEFT JOIN users u ON sr.user_id = u.id`
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id`
 
 	var args []interface{}
 	whereApplied := false
@@ -139,13 +162,13 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 		whereApplied = true
 	}
 
-	if categoryFilter != "" {
+	if regionFilter != nil {
 		if whereApplied {
-			query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
+			query += fmt.Sprintf(` AND sr.region_id = $%d`, len(args)+1)
 		} else {
-			query += ` WHERE sr.category = $1`
+			query += ` WHERE sr.region_id = $1`
 		}
-		args = append(args, categoryFilter)
+		args = append(args, *regionFilter)
 	}
 
 	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
@@ -154,12 +177,18 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	return r.scanServiceRequests(ctx, query, args...)
 }
 
-func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, status, categoryFilter string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, status string, regionFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
 	offset := (page - 1) * limit
-	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id
 	          WHERE sr.user_id = $1`
 
 	args := []interface{}{userID}
@@ -173,9 +202,9 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 		args = append(args, status)
 	}
 
-	if categoryFilter != "" {
-		query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
-		args = append(args, categoryFilter)
+	if regionFilter != nil {
+		query += fmt.Sprintf(` AND sr.region_id = $%d`, len(args)+1)
+		args = append(args, *regionFilter)
 	}
 
 	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
@@ -197,12 +226,14 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 		if err := rows.Scan(
 			&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
+			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+			&sr.TeamID, &sr.TeamName,
+			&sr.RegionID, &sr.RegionName,
+			&sr.CreatedAt, &sr.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service request: %w", err)
 		}
 
-		// Set icon based on service ID
 		if sr.ServiceID != nil {
 			sr.Icon = models.GetServiceIcon(*sr.ServiceID)
 		}
@@ -223,8 +254,8 @@ func (r *ServiceRequestRepository) CountServiceRequestsByUser(ctx context.Contex
 
 func (r *ServiceRequestRepository) CountServiceRequestsByStatusByUser(ctx context.Context, userID int64) (map[string]int, error) {
 	query := `
-		SELECT status, COUNT(*) 
-		FROM service_requests 
+		SELECT status, COUNT(*)
+		FROM service_requests
 		WHERE user_id = $1
 		GROUP BY status`
 
@@ -265,26 +296,34 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 		UPDATE service_requests SET status = $1, updated_at = NOW()
 		WHERE id = $2
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
-		          request_data, attachments, status, latitude, longitude, geocoded_address, created_at, updated_at`
+		          request_data, attachments, status, latitude, longitude, geocoded_address,
+		          team_id, region_id, created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, status, id).Scan(
 		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+		&sr.TeamID, &sr.RegionID, &sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update service request status: %w", err)
 	}
 
-	// Fetch user name
 	if sr.UserID != nil {
 		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *sr.UserID).Scan(&sr.UserName)
 	}
 
-	// Set icon based on service ID
 	if sr.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+	}
+
+	// Fetch team name and region name
+	if sr.TeamID != nil {
+		r.db.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, *sr.TeamID).Scan(&sr.TeamName)
+	}
+	if sr.RegionID != nil {
+		r.db.QueryRow(ctx, `SELECT name FROM regions WHERE id = $1`, *sr.RegionID).Scan(&sr.RegionName)
 	}
 
 	return sr, nil
@@ -311,11 +350,17 @@ func (r *ServiceRequestRepository) SaveGeocoding(ctx context.Context, id int64, 
 
 func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx context.Context, serviceID int64, page, limit int) ([]*models.ServiceRequestDetailResponse, error) {
 	offset := (page - 1) * limit
-	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number, sr.service_title, sr.category,
-	                 sr.request_data, sr.attachments, sr.status, sr.latitude, sr.longitude, sr.geocoded_address, sr.created_at, sr.updated_at,
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at,
 	                 u.username, u.email, u.cpf, u.birth_date, u.type, u.created_at, u.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id
 	          WHERE sr.service_id = $1
 	          ORDER BY sr.created_at DESC
 	          LIMIT $2 OFFSET $3`
@@ -334,17 +379,16 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 		if err := rows.Scan(
 			&sr.ID, &uID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
-			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress, &sr.CreatedAt, &sr.UpdatedAt,
+			&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+			&sr.TeamID, &sr.TeamName,
+			&sr.RegionID, &sr.RegionName,
+			&sr.CreatedAt, &sr.UpdatedAt,
 			&user.Username, &user.Email, &user.CPF, &user.BirthDate, &user.Type, &user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
-			// If user is null, partial scan might fail or return zero values.
-			// However, since we joined with u.id it should be fine if there is a user.
-			// If u.id is null, those fields will be null/zero.
 			return nil, err
 		}
 		sr.UserID = uID
 
-		// Set icon based on service ID
 		if sr.ServiceID != nil {
 			sr.Icon = models.GetServiceIcon(*sr.ServiceID)
 		}
@@ -392,7 +436,7 @@ func (r *ServiceRequestRepository) GetServiceStatusStats(ctx context.Context, se
 
 func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, serviceID int64) (int, error) {
 	queryAvg := `
-		SELECT 
+		SELECT
 			COALESCE(ROUND(EXTRACT(EPOCH FROM AVG(updated_at - created_at)) / 86400)::int, 0)
 		FROM service_requests
 		WHERE service_id = $1 AND status = 'completed'`
@@ -406,20 +450,20 @@ func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, se
 	return result, nil
 }
 
-func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, categoryFilter string) (*models.HomeResponse, error) {
+func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter *int64) (*models.HomeResponse, error) {
 	baseWhere := ""
 	var args []interface{}
 
 	if !isAdmin {
 		baseWhere = "WHERE sr.user_id = $1"
 		args = append(args, userID)
-	} else if categoryFilter != "" {
-		baseWhere = "WHERE sr.category = $1"
-		args = append(args, categoryFilter)
+	} else if regionFilter != nil {
+		baseWhere = "WHERE sr.region_id = $1"
+		args = append(args, *regionFilter)
 	}
 
 	statsQuery := fmt.Sprintf(`
-		SELECT status, COUNT(*) 
+		SELECT status, COUNT(*)
 		FROM service_requests sr
 		%s
 		GROUP BY status`, baseWhere)
@@ -463,7 +507,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	var completedToday int
 	completedTodayQuery := fmt.Sprintf(`
-		SELECT COUNT(*) 
+		SELECT COUNT(*)
 		FROM service_requests sr
 		%s
 		%s status = 'completed' AND updated_at::date = CURRENT_DATE
@@ -472,7 +516,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	var createdToday int
 	createdTodayQuery := fmt.Sprintf(`
-		SELECT COUNT(*) 
+		SELECT COUNT(*)
 		FROM service_requests sr
 		%s
 		%s created_at::date = CURRENT_DATE
@@ -490,16 +534,22 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	// Get top 5 most requested services
 	var topServices []models.PopularService
-	topQuery := `
+	var topArgs []interface{}
+	topFilter := ""
+	if baseWhere != "" {
+		topFilter = "AND " + baseWhere
+		topArgs = append(topArgs, args...)
+	}
+	topQuery := fmt.Sprintf(`
 		SELECT s.id, s.title, s.category, COUNT(sr.id) as request_count
 		FROM services s
 		INNER JOIN service_requests sr ON s.id = sr.service_id
-		WHERE sr.status != 'cancelled'
+		WHERE 1=1 %s AND sr.status != 'cancelled'
 		GROUP BY s.id, s.title, s.category
 		ORDER BY request_count DESC
 		LIMIT 5
-	`
-	topRows, err := r.db.Query(ctx, topQuery)
+	`, topFilter)
+	topRows, err := r.db.Query(ctx, topQuery, topArgs...)
 	if err != nil {
 		fmt.Printf("Warning: failed to fetch popular services: %v\n", err)
 	} else {
@@ -519,15 +569,23 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	// Get top 5 best rated services
 	var topRated []models.TopRatedService
-	ratedQuery := `
+	var ratedArgs []interface{}
+	ratedFilter := ""
+	if baseWhere != "" {
+		ratedFilter = "AND " + baseWhere
+		ratedArgs = append(ratedArgs, args...)
+	}
+	ratedQuery := fmt.Sprintf(`
 		SELECT s.id, s.title, s.category, AVG(r.stars) as avg_stars, COUNT(r.id) as rating_count
 		FROM services s
 		INNER JOIN service_ratings r ON s.id = r.service_id
+		INNER JOIN service_requests sr ON r.service_request_id = sr.id
+		WHERE 1=1 %s
 		GROUP BY s.id, s.title, s.category
 		ORDER BY avg_stars DESC, rating_count DESC
 		LIMIT 5
-	`
-	ratedRows, err := r.db.Query(ctx, ratedQuery)
+	`, ratedFilter)
+	ratedRows, err := r.db.Query(ctx, ratedQuery, ratedArgs...)
 	if err != nil {
 		fmt.Printf("Warning: failed to fetch top rated services: %v\n", err)
 	} else {
@@ -564,14 +622,19 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	// Calculate Alerts
 	alerts := []models.HomeAlert{}
 
-	// 1. Stagnant requests (> 3 days) - GLOBAL
+	// 1. Stagnant requests (> 3 days)
 	var stagnantCount int
-	stagnantQuery := `
-		SELECT COUNT(*) 
-		FROM service_requests
-		WHERE status IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
-	`
-	r.db.QueryRow(ctx, stagnantQuery).Scan(&stagnantCount)
+	var stagnantArgs []interface{}
+	stagnantPrefix := map[bool]string{true: baseWhere + " AND ", false: "WHERE "}[baseWhere != ""]
+	if baseWhere != "" {
+		stagnantArgs = append(stagnantArgs, args...)
+	}
+	stagnantQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM service_requests sr
+		%sstatus IN ('pending', 'in_progress') AND created_at < NOW() - INTERVAL '3 days'
+	`, stagnantPrefix)
+	r.db.QueryRow(ctx, stagnantQuery, stagnantArgs...).Scan(&stagnantCount)
 
 	if stagnantCount > 0 {
 		alerts = append(alerts, models.HomeAlert{
@@ -580,18 +643,23 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		})
 	}
 
-	// 2. Most critical service - GLOBAL (Only if > 5 pending/urgent)
+	// 2. Most critical service (Only if > 5 pending)
 	var criticalService string
 	var criticalCount int
-	criticalQuery := `
+	var criticalArgs []interface{}
+	criticalPrefix := map[bool]string{true: baseWhere + " AND ", false: "WHERE "}[baseWhere != ""]
+	if baseWhere != "" {
+		criticalArgs = append(criticalArgs, args...)
+	}
+	criticalQuery := fmt.Sprintf(`
 		SELECT service_title, COUNT(*)
-		FROM service_requests
-		WHERE status IN ('pending', 'urgent')
+		FROM service_requests sr
+		%sstatus = 'pending'
 		GROUP BY service_title
 		ORDER BY COUNT(*) DESC
 		LIMIT 1
-	`
-	r.db.QueryRow(ctx, criticalQuery).Scan(&criticalService, &criticalCount)
+	`, criticalPrefix)
+	r.db.QueryRow(ctx, criticalQuery, criticalArgs...).Scan(&criticalService, &criticalCount)
 
 	if criticalService != "" && criticalCount > 5 {
 		alerts = append(alerts, models.HomeAlert{
@@ -601,7 +669,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	}
 
 	catQuery := fmt.Sprintf(`
-		SELECT category, COUNT(*) 
+		SELECT category, COUNT(*)
 		FROM service_requests sr
 		%s
 		GROUP BY category
@@ -724,11 +792,11 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	// Volume for the last 7 days
 	var volume7d []models.VolumeStat
 	volQuery := fmt.Sprintf(`
-		SELECT date_trunc('day', created_at) as day, COUNT(*) 
+		SELECT date_trunc('day', created_at) as day, COUNT(*)
 		FROM service_requests sr
 		%s
-		%s created_at >= CURRENT_DATE - INTERVAL '7 days' 
-		GROUP BY day 
+		%s created_at >= CURRENT_DATE - INTERVAL '7 days'
+		GROUP BY day
 		ORDER BY day ASC
 	`, baseWhere, map[bool]string{true: "AND", false: "WHERE"}[baseWhere != ""])
 	vRows, err := r.db.Query(ctx, volQuery, args...)
@@ -760,4 +828,13 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 		PopularServices:  topServices,
 		TopRatedServices: topRated,
 	}, nil
+}
+
+// AssignRegionAndTeam updates a service request with the detected region and team.
+func (r *ServiceRequestRepository) AssignRegionAndTeam(ctx context.Context, requestID int64, regionID, teamID *int64) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE service_requests SET region_id = $1, team_id = $2, updated_at = NOW() WHERE id = $3`,
+		regionID, teamID, requestID,
+	)
+	return err
 }

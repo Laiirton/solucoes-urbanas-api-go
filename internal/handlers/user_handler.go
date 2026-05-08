@@ -100,7 +100,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		total = 0
 	}
 
-	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), id, "", "", "", 1, 10)
+	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), id, "", "", nil, 1, 10)
 	if err != nil {
 		requests = []*models.ServiceRequest{}
 	}
@@ -137,7 +137,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		total = 0
 	}
 
-	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), userID, "", "", "", 1, 10)
+	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), userID, "", "", nil, 1, 10)
 	if err != nil {
 		requests = []*models.ServiceRequest{}
 	}

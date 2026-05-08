@@ -17,6 +17,10 @@ type ServiceRequest struct {
 	RequestData     json.RawMessage `json:"request_data"`
 	Attachments     json.RawMessage `json:"attachments,omitempty"`
 	Status          string          `json:"status"`
+	TeamID          *int64          `json:"team_id,omitempty"`
+	TeamName        string          `json:"team_name,omitempty"`
+	RegionID        *int64          `json:"region_id,omitempty"`
+	RegionName      string          `json:"region_name,omitempty"`
 	Latitude        *float64        `json:"latitude,omitempty"`
 	Longitude       *float64        `json:"longitude,omitempty"`
 	GeocodedAddress *string         `json:"geocoded_address,omitempty"`

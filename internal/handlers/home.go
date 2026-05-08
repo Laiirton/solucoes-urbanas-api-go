@@ -38,19 +38,16 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isAdmin := user.Type != nil && *user.Type == "admin"
-	var categoryFilter string
-	if isAdmin && user.Team != nil {
-		categoryFilter = user.Team.ServiceCategory
-	}
+	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
 
-	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, categoryFilter)
+	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, regionFilter)
 	if err != nil {
 		http.Error(w, "Error computing home stats", http.StatusInternalServerError)
 		return
 	}
 
 	resp.MapLocations = []models.MapLocation{}
-	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", categoryFilter, 1, 1000)
+	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", regionFilter, 1, 1000)
 	if err == nil {
 		for _, sr := range list {
 			var lat, lon float64

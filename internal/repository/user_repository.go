@@ -95,14 +95,17 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
 		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
-		 t.id, t.name, t.service_category, t.description, t.created_at, t.updated_at
+		 t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
 		FROM users u
 		LEFT JOIN teams t ON u.team_id = t.id
+		LEFT JOIN regions rg ON t.region_id = rg.id
 		WHERE u.id = $1`
 
 	user := &models.User{}
 	var tID *int64
-	var tName, tCat *string
+	var tName *string
+	var tRegionID *int64
+	var tRegionName string
 	var tDesc *string
 	var tCreatedAt, tUpdatedAt *time.Time
 	var workAreaResult []byte
@@ -112,7 +115,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 		&user.FullName, &user.CPF, &user.BirthDate,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
-		&tID, &tName, &tCat, &tDesc, &tCreatedAt, &tUpdatedAt,
+		&tID, &tName, &tRegionID, &tRegionName, &tDesc, &tCreatedAt, &tUpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -126,12 +129,13 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 	if tID != nil {
 		user.Team = &models.Team{
-			ID:              *tID,
-			Name:            *tName,
-			ServiceCategory: *tCat,
-			Description:     tDesc,
-			CreatedAt:       *tCreatedAt,
-			UpdatedAt:       *tUpdatedAt,
+			ID:          *tID,
+			Name:        *tName,
+			RegionID:    tRegionID,
+			RegionName:  tRegionName,
+			Description: tDesc,
+			CreatedAt:   *tCreatedAt,
+			UpdatedAt:   *tUpdatedAt,
 		}
 	}
 
@@ -140,28 +144,31 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
 	offset := (page - 1) * limit
-	query := `SELECT id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at
- FROM users`
+	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
+		 t.id, t.name, t.description, t.region_id, COALESCE(rg.name, ''), t.created_at, t.updated_at
+ FROM users u
+ LEFT JOIN teams t ON u.team_id = t.id
+ LEFT JOIN regions rg ON t.region_id = rg.id`
 
 	var args []interface{}
 	whereApplied := false
 
 	if search != "" {
-		query += ` WHERE (CAST(id AS TEXT) ILIKE $1 OR username ILIKE $1 OR full_name ILIKE $1 OR email ILIKE $1 OR type ILIKE $1 OR cpf ILIKE $1)`
+		query += ` WHERE (CAST(u.id AS TEXT) ILIKE $1 OR u.username ILIKE $1 OR u.full_name ILIKE $1 OR u.email ILIKE $1 OR u.type ILIKE $1 OR u.cpf ILIKE $1)`
 		args = append(args, "%"+search+"%")
 		whereApplied = true
 	}
 
 	if userType != "" {
 		if whereApplied {
-			query += fmt.Sprintf(` AND type ILIKE $%d`, len(args)+1)
+			query += fmt.Sprintf(` AND u.type ILIKE $%d`, len(args)+1)
 		} else {
-			query += ` WHERE type ILIKE $1`
+			query += ` WHERE u.type ILIKE $1`
 		}
 		args = append(args, userType)
 	}
 
-	query += fmt.Sprintf(` ORDER BY id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	query += fmt.Sprintf(` ORDER BY u.id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
@@ -174,11 +181,19 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 	for rows.Next() {
 		user := &models.User{}
 		var workAreaResult []byte
+		var tID *int64
+		var tName *string
+		var tDesc *string
+		var tRegionID *int64
+		var tRegionName string
+		var tCreatedAt time.Time
+		var tUpdatedAt time.Time
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
 			&user.FullName, &user.CPF, &user.BirthDate,
 			&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 			&user.CreatedAt, &user.UpdatedAt,
+			&tID, &tName, &tDesc, &tRegionID, &tRegionName, &tCreatedAt, &tUpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
@@ -186,6 +201,18 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		if workAreaResult != nil {
 			if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal work_area: %w", err)
+			}
+		}
+
+		if tID != nil {
+			user.Team = &models.Team{
+				ID:          *tID,
+				Name:        *tName,
+				Description: tDesc,
+				RegionID:    tRegionID,
+				RegionName:  tRegionName,
+				CreatedAt:   tCreatedAt,
+				UpdatedAt:   tUpdatedAt,
 			}
 		}
 

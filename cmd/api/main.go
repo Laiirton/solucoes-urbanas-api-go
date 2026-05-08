@@ -40,6 +40,7 @@ func main() {
 	srRepo := repository.NewServiceRequestRepository(db.Pool)
 	newsRepo := repository.NewNewsRepository(db.Pool)
 	teamRepo := repository.NewTeamRepository(db.Pool)
+	regionRepo := repository.NewRegionRepository(db.Pool)
 	pushTokenRepo := repository.NewPushTokenRepository(db.Pool)
 	sysNotifRepo := repository.NewSystemNotificationRepository(db.Pool)
 	appConfigRepo := repository.NewAppConfigRepository(db.Pool)
@@ -48,7 +49,7 @@ func main() {
 
 	storageService := services.NewSupabaseStorageService(cfg.SupabaseURL, cfg.SupabaseKey, cfg.SupabaseBucket)
 
-	router := routes.Setup(userRepo, serviceRepo, srRepo, newsRepo, teamRepo, pushTokenRepo, sysNotifRepo, appConfigRepo, serviceRatingRepo, attendanceRepo, storageService, cfg.JWTSecret)
+	router := routes.Setup(userRepo, serviceRepo, srRepo, newsRepo, teamRepo, regionRepo, pushTokenRepo, sysNotifRepo, appConfigRepo, serviceRatingRepo, attendanceRepo, storageService, cfg.JWTSecret)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server starting on %s", addr)

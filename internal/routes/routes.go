@@ -20,6 +20,7 @@ func Setup(
 	srRepo *repository.ServiceRequestRepository,
 	newsRepo *repository.NewsRepository,
 	teamRepo *repository.TeamRepository,
+	regionRepo *repository.RegionRepository,
 	pushTokenRepo *repository.PushTokenRepository,
 	sysNotifRepo *repository.SystemNotificationRepository,
 	appConfigRepo *repository.AppConfigRepository,
@@ -49,12 +50,13 @@ func Setup(
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
 	pushService := services.NewExpoPushService()
-	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, regionRepo, teamRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
 	notificationHandler := handlers.NewNotificationHandler(pushTokenRepo, sysNotifRepo)
-	teamHandler := handlers.NewTeamHandler(teamRepo)
+	teamHandler := handlers.NewTeamHandler(teamRepo, userRepo, srRepo)
+	regionHandler := handlers.NewRegionHandler(regionRepo, userRepo)
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
@@ -133,12 +135,24 @@ func Setup(
 			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
 			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
 
+			// Regions
+			r.Get("/regions", regionHandler.List)
+			r.Post("/regions", regionHandler.Create)
+			r.Get("/regions/{id}", regionHandler.Get)
+			r.Put("/regions/{id}", regionHandler.Update)
+			r.Delete("/regions/{id}", regionHandler.Delete)
+			r.Get("/regions/bairro/{bairro}", regionHandler.FindByBairro)
+
 			// Teams
 			r.Get("/teams", teamHandler.ListTeams)
 			r.Post("/teams", teamHandler.CreateTeam)
 			r.Get("/teams/{id}", teamHandler.GetTeam)
 			r.Put("/teams/{id}", teamHandler.UpdateTeam)
 			r.Delete("/teams/{id}", teamHandler.DeleteTeam)
+			r.Get("/teams/{id}/members", teamHandler.ListTeamMembers)
+			r.Post("/teams/{id}/members", teamHandler.AddTeamMember)
+			r.Delete("/teams/{id}/members/{userId}", teamHandler.RemoveTeamMember)
+			r.Get("/teams/{id}/stats", teamHandler.GetTeamDashboard)
 
 			// Service Requests
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
