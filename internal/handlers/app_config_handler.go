@@ -62,6 +62,35 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 		mobileServices = []int64{}
 	}
 
+	// Filter featured content by mobile (only show what's actually available)
+	if len(mobileCategories) > 0 {
+		mobileCatSet := make(map[string]bool, len(mobileCategories))
+		for _, c := range mobileCategories {
+			mobileCatSet[c] = true
+		}
+		filtered := make([]models.CategorySummary, 0, len(featuredCategories))
+		for _, fc := range featuredCategories {
+			if mobileCatSet[fc.Name] {
+				filtered = append(filtered, fc)
+			}
+		}
+		featuredCategories = filtered
+	}
+
+	if len(mobileServices) > 0 {
+		mobileSvcSet := make(map[int64]bool, len(mobileServices))
+		for _, id := range mobileServices {
+			mobileSvcSet[id] = true
+		}
+		filtered := make([]models.ServiceSummary, 0, len(featuredServices))
+		for _, fs := range featuredServices {
+			if mobileSvcSet[fs.ID] {
+				filtered = append(filtered, fs)
+			}
+		}
+		featuredServices = filtered
+	}
+
 	// Build the response
 	response := models.MobileHomeResponse{
 		LogoURL: logoURL,
