@@ -60,7 +60,7 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 	return svc, nil
 }
 
-func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string) ([]*models.Service, error) {
+func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string, allowedServices []int64) ([]*models.Service, error) {
 	offset := (page - 1) * limit
 	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
               FROM services`
@@ -80,6 +80,16 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 		}
 		whereApplied = true
 		args = append(args, allowedCategories)
+	}
+
+	if len(allowedServices) > 0 {
+		if whereApplied {
+			query += fmt.Sprintf(` AND id = ANY($%d)`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE id = ANY($%d)`, len(args)+1)
+		}
+		whereApplied = true
+		args = append(args, allowedServices)
 	}
 
 	if search != "" {

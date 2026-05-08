@@ -34,13 +34,25 @@ func (h *ServiceHandler) getAllowedCategories(r *http.Request) []string {
 	return categories
 }
 
+func (h *ServiceHandler) getAllowedServices(r *http.Request) []int64 {
+	if h.appConfigRepo == nil {
+		return nil
+	}
+	showAll := r.URL.Query().Get("all") == "true"
+	if showAll {
+		return nil
+	}
+	services, _ := h.appConfigRepo.GetMobileServices(r.Context())
+	return services
+}
+
 // GET /services
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
-	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit, h.getAllowedCategories(r))
+	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit, h.getAllowedCategories(r), h.getAllowedServices(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list services")
 		return
