@@ -30,16 +30,21 @@ type CategorySummary struct {
 	Icon string `json:"icon"`
 }
 
+type CategoryWithServices struct {
+	Name     string           `json:"name"`
+	Icon     string           `json:"icon"`
+	Services []ServiceSummary `json:"services"`
+}
+
 type MobileHomeResponse struct {
-	LogoURL          string      `json:"logo_url"`
-	Banners          []AppBanner `json:"banners"`
-	Sections         []Section   `json:"sections"`
-	MobileCategories []string    `json:"mobile_categories"`
-	MobileServices   []int64     `json:"mobile_services"`
+	LogoURL            string                 `json:"logo_url"`
+	Banners            []AppBanner            `json:"banners"`
+	Categories         []CategoryWithServices `json:"categories"`
+	FeaturedServiceIDs []int64                `json:"featured_service_ids"`
 }
 
 type Section struct {
-	Type  string      `json:"type"` // e.g., "services", "categories"
+	Type  string      `json:"type"`
 	Title string      `json:"title"`
 	Data  interface{} `json:"data"`
 }

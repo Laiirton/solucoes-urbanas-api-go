@@ -127,7 +127,7 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 	return services, nil
 }
 
-func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool) ([]*models.Service, error) {
+func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool, allowedServices []int64) ([]*models.Service, error) {
 	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
               FROM services WHERE category = $1`
 

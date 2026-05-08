@@ -29,7 +29,7 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 	// 1. Get Logo
 	var logoURL string
 	if err := h.repo.GetSetting(ctx, "logo_url", &logoURL); err != nil {
-		logoURL = "" // Default or empty
+		logoURL = ""
 	}
 
 	// 2. Get Banners
@@ -38,48 +38,50 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 		banners = []models.AppBanner{}
 	}
 
-	// 3. Get Featured Services
-	featuredServices, err := h.repo.GetFeaturedServices(ctx)
-	if err != nil {
-		featuredServices = []models.ServiceSummary{}
+	// 3. Get Featured Service IDs
+	featuredIDs, _ := h.repo.GetFeaturedServiceIDs(ctx)
+	if featuredIDs == nil {
+		featuredIDs = []int64{}
 	}
 
-	// 4. Get Featured Categories
-	featuredCategories, err := h.repo.GetFeaturedCategories(ctx)
-	if err != nil {
-		featuredCategories = []models.CategorySummary{}
-	}
-
-	// 5. Get Mobile Categories
+	// 4. Get Mobile Categories
 	mobileCategories, _ := h.repo.GetMobileCategories(ctx)
-	if mobileCategories == nil {
-		mobileCategories = []string{}
+
+	// 5. Get Mobile Services
+	mobileServices, _ := h.repo.GetMobileServices(ctx)
+
+	// 6. Get all services filtered by mobile config
+	allServices, err := h.repo.GetServicesFiltered(ctx, mobileCategories, mobileServices)
+	if err != nil {
+		allServices = []models.ServiceSummary{}
 	}
 
-	// 6. Get Mobile Services
-	mobileServices, _ := h.repo.GetMobileServices(ctx)
-	if mobileServices == nil {
-		mobileServices = []int64{}
+	// 7. Build categories with nested services
+	categoryMap := make(map[string]*models.CategoryWithServices)
+	var categoryOrder []string
+	for _, svc := range allServices {
+		if _, exists := categoryMap[svc.Category]; !exists {
+			categoryOrder = append(categoryOrder, svc.Category)
+			categoryMap[svc.Category] = &models.CategoryWithServices{
+				Name:     svc.Category,
+				Icon:     models.GetCategoryIcon(svc.Category),
+				Services: []models.ServiceSummary{},
+			}
+		}
+		categoryMap[svc.Category].Services = append(categoryMap[svc.Category].Services, svc)
+	}
+
+	categories := make([]models.CategoryWithServices, 0, len(categoryOrder))
+	for _, name := range categoryOrder {
+		categories = append(categories, *categoryMap[name])
 	}
 
 	// Build the response
 	response := models.MobileHomeResponse{
-		LogoURL: logoURL,
-		Banners: banners,
-		Sections: []models.Section{
-			{
-				Type:  "categories",
-				Title: "Categorias",
-				Data:  featuredCategories,
-			},
-			{
-				Type:  "services",
-				Title: "Serviços em Destaque",
-				Data:  featuredServices,
-			},
-		},
-		MobileCategories: mobileCategories,
-		MobileServices:   mobileServices,
+		LogoURL:            logoURL,
+		Banners:            banners,
+		Categories:         categories,
+		FeaturedServiceIDs: featuredIDs,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

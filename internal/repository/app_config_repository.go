@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -141,6 +142,49 @@ func (r *AppConfigRepository) GetMobileServices(ctx context.Context) ([]int64, e
 	var services []int64
 	if err := r.GetSetting(ctx, "mobile_services", &services); err != nil {
 		return nil, nil
+	}
+	return services, nil
+}
+
+func (r *AppConfigRepository) GetFeaturedServiceIDs(ctx context.Context) ([]int64, error) {
+	var ids []int64
+	if err := r.GetSetting(ctx, "featured_services", &ids); err != nil {
+		return nil, nil
+	}
+	return ids, nil
+}
+
+func (r *AppConfigRepository) GetServicesFiltered(ctx context.Context, categories []string, serviceIDs []int64) ([]models.ServiceSummary, error) {
+	query := `SELECT id, title, category FROM services WHERE is_active = TRUE`
+	var args []interface{}
+
+	if len(categories) > 0 {
+		query += fmt.Sprintf(` AND category = ANY($%d)`, len(args)+1)
+		args = append(args, categories)
+	}
+	if len(serviceIDs) > 0 {
+		query += fmt.Sprintf(` AND id = ANY($%d)`, len(args)+1)
+		args = append(args, serviceIDs)
+	}
+	query += ` ORDER BY category ASC, title ASC`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var services []models.ServiceSummary
+	for rows.Next() {
+		var s models.ServiceSummary
+		if err := rows.Scan(&s.ID, &s.Title, &s.Category); err != nil {
+			return nil, err
+		}
+		s.Icon = models.GetServiceIcon(s.ID)
+		services = append(services, s)
+	}
+	if services == nil {
+		services = []models.ServiceSummary{}
 	}
 	return services, nil
 }
