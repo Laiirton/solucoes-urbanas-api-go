@@ -28,15 +28,19 @@ func (r *ServiceRepository) CreateService(ctx context.Context, req *models.Creat
 	}
 
 	query := `
-		INSERT INTO services (title, description, category, form_schema, is_active, created_at, updated_at)
+		INSERT INTO services (title, description, category, category_id, form_schema, is_active, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING id, title, description, category, form_schema, is_active, created_at, updated_at`
+		RETURNING id, title, description, category, category_id, form_schema, is_active, created_at, updated_at`
 
 	svc := &models.Service{}
+	var categoryID *int64
+	if req.CategoryID != nil {
+		categoryID = req.CategoryID
+	}
 	err := r.db.QueryRow(ctx, query,
-		req.Title, req.Description, req.Category, formSchema, isActive,
+		req.Title, req.Description, req.Category, categoryID, formSchema, isActive,
 	).Scan(
-		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 		&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 	)
 	if err != nil {
@@ -46,12 +50,12 @@ func (r *ServiceRepository) CreateService(ctx context.Context, req *models.Creat
 }
 
 func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*models.Service, error) {
-	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
-              FROM services WHERE id = $1`
+	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
+               FROM services WHERE id = $1`
 
 	svc := &models.Service{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 		&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 	)
 	if err != nil {
@@ -62,8 +66,8 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 
 func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string, allowedServices []int64) ([]*models.Service, error) {
 	offset := (page - 1) * limit
-	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
-              FROM services`
+	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
+               FROM services`
 
 	var args []interface{}
 	whereApplied := false
@@ -114,7 +118,7 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 	for rows.Next() {
 		svc := &models.Service{}
 		if err := rows.Scan(
-			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 			&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service: %w", err)
@@ -156,6 +160,48 @@ func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category
 		svc := &models.Service{}
 		if err := rows.Scan(
 			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+			&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan service: %w", err)
+		}
+		services = append(services, svc)
+	}
+	if services == nil {
+		services = []*models.Service{}
+	}
+	return services, nil
+}
+
+func (r *ServiceRepository) ListServicesByCategoryID(ctx context.Context, categoryID int64, onlyActive bool, allowedServices []int64) ([]*models.Service, error) {
+	query := `SELECT s.id, s.title, s.description, s.category, s.category_id, s.form_schema, s.is_active, s.created_at, s.updated_at
+              FROM services s
+              WHERE s.category_id = $1`
+
+	var args []interface{}
+	args = append(args, categoryID)
+
+	if onlyActive {
+		query += ` AND s.is_active = TRUE`
+	}
+
+	if len(allowedServices) > 0 {
+		query += fmt.Sprintf(` AND s.id = ANY($%d)`, len(args)+1)
+		args = append(args, allowedServices)
+	}
+
+	query += ` ORDER BY s.title ASC`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services by category id: %w", err)
+	}
+	defer rows.Close()
+
+	var services []*models.Service
+	for rows.Next() {
+		svc := &models.Service{}
+		if err := rows.Scan(
+			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 			&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service: %w", err)

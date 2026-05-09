@@ -26,6 +26,7 @@ func Setup(
 	appConfigRepo *repository.AppConfigRepository,
 	ratingRepo *repository.ServiceRatingRepository,
 	attendanceRepo *repository.ServiceAttendanceRepository,
+	categoryRepo *repository.CategoryRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -60,6 +61,7 @@ func Setup(
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
+	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo)
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
@@ -83,6 +85,7 @@ func Setup(
 		r.Get("/services", serviceHandler.ListServices)
 		r.Get("/services/categories", serviceHandler.ListCategories)
 		r.Get("/services/category/{category}", serviceHandler.ListServicesByCategory)
+		r.Get("/services/category/id/{id}", serviceHandler.ListServicesByCategoryID)
 		r.Get("/services/{id}", serviceHandler.GetService)
 		r.Get("/services/{id}/ratings", ratingHandler.ListRatingsByService)
 		r.Get("/services/{id}/rating-stats", ratingHandler.GetRatingStats)
@@ -93,6 +96,10 @@ func Setup(
 
 		// App Config route (public)
 		r.Get("/app/config", appConfigHandler.GetMobileConfig)
+
+		// Categories (public read-only)
+		r.Get("/categories", categoryHandler.ListCategories)
+		r.Get("/categories/{id}", categoryHandler.GetCategory)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -181,6 +188,11 @@ func Setup(
 			r.Post("/app/banners", appConfigHandler.CreateBanner)
 			r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
 			r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
+
+			// Categories (admin write)
+			r.Post("/categories", categoryHandler.CreateCategory)
+			r.Put("/categories/{id}", categoryHandler.UpdateCategory)
+			r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 		})
 	})
 
