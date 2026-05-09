@@ -1,0 +1,12 @@
+.git
+.agents
+.commandcode
+graphify-out
+.env
+.env.*
+docker-compose.yml
+*.md
+LICENSE
+.gitignore
+.gitattributes
+.graphifyignore
