@@ -16,18 +16,13 @@ FROM categories c
 WHERE services.category = c.name
 AND services.category_id IS NULL;
 
--- Add foreign key constraint if not exists
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE table_name = 'services' AND constraint_name = 'fk_services_category'
-    ) THEN
-        ALTER TABLE services 
-        ADD CONSTRAINT fk_services_category 
-        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL;
-    END IF;
-END $$;
+-- Drop existing constraint if any (from migration 19 which created it without ON DELETE SET NULL)
+ALTER TABLE services DROP CONSTRAINT IF EXISTS fk_services_category;
+
+-- Re-create with ON DELETE SET NULL
+ALTER TABLE services 
+ADD CONSTRAINT fk_services_category 
+FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL;
 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_services_category_id ON services(category_id);
