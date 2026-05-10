@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -17,14 +16,14 @@ func NewGeolocationHandler() *GeolocationHandler {
 func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 	street := r.URL.Query().Get("street")
 	if len(street) < 2 {
-		http.Error(w, "street parameter is required and must have at least 2 characters", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "street parameter is required and must have at least 2 characters")
 		return
 	}
 
 	nominatimURL := "https://nominatim.openstreetmap.org/search"
 	reqURL, err := url.Parse(nominatimURL)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -37,33 +36,27 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, reqURL.String(), nil)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	req.Header.Set("User-Agent", "Laravel-Geolocation/1.0")
 
-	// Skipping cert check (since the Laravel app uses a specific local cert for verify, using default or skipping)
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
-		http.Error(w, "Erro ao consultar serviço de geolocalização", http.StatusBadGateway)
+		respondError(w, http.StatusBadGateway, "Erro ao consultar serviço de geolocalização")
 		return
 	}
 	defer resp.Body.Close()
 
 	var body []map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		http.Error(w, "Erro ao processar resposta da geolocalização", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Erro ao processar resposta da geolocalização")
 		return
 	}
 
 	if len(body) == 0 {
-		http.Error(w, "Endereço não encontrado", http.StatusNotFound)
+		respondError(w, http.StatusNotFound, "Endereço não encontrado")
 		return
 	}
 
@@ -73,15 +66,13 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	lat, _ := strconv.ParseFloat(latStr, 64)
 	lon, _ := strconv.ParseFloat(lonStr, 64)
-	displayName, _ := first["display_name"].(string)
 
 	response := map[string]interface{}{
 		"query":        street,
 		"latitude":     lat,
 		"longitude":    lon,
-		"display_name": displayName,
+		"display_name": first["display_name"],
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }

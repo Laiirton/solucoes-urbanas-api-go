@@ -54,20 +54,23 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
-	// Fetch team name and region name
-	if sr.TeamID != nil {
+	// Single JOIN query to fetch team name, region name, and user name together
+	if sr.TeamID != nil && sr.RegionID != nil && userID != nil {
+		r.db.QueryRow(ctx, `
+			SELECT COALESCE(u.full_name, ''), COALESCE(t.name, ''), COALESCE(rg.name, '')
+			FROM service_requests sr
+			LEFT JOIN users u ON sr.user_id = u.id
+			LEFT JOIN teams t ON sr.team_id = t.id
+			LEFT JOIN regions rg ON sr.region_id = rg.id
+			WHERE sr.id = $1`, sr.ID).Scan(&sr.UserName, &sr.TeamName, &sr.RegionName)
+	} else if sr.TeamID != nil {
 		r.db.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, *sr.TeamID).Scan(&sr.TeamName)
-	}
-	if sr.RegionID != nil {
+	} else if sr.RegionID != nil {
 		r.db.QueryRow(ctx, `SELECT name FROM regions WHERE id = $1`, *sr.RegionID).Scan(&sr.RegionName)
-	}
-
-	// Fetch user name
-	if userID != nil {
+	} else if userID != nil {
 		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *userID).Scan(&sr.UserName)
 	}
 
-	// Set icon based on service ID
 	if req.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*req.ServiceID)
 	}
@@ -292,38 +295,41 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
+	// Single JOIN query to avoid N+1: fetch sr + team name + region name + user name in one query
 	query := `
-		UPDATE service_requests SET status = $1, updated_at = NOW()
-		WHERE id = $2
-		RETURNING id, user_id, service_id, protocol_number, service_title, category,
-		          request_data, attachments, status, latitude, longitude, geocoded_address,
-		          team_id, region_id, created_at, updated_at`
+		SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+		       sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+		       sr.latitude, sr.longitude, sr.geocoded_address,
+		       sr.team_id, COALESCE(t.name, ''),
+		       sr.region_id, COALESCE(rg.name, ''),
+		       sr.created_at, sr.updated_at
+		FROM service_requests sr
+		LEFT JOIN users u ON sr.user_id = u.id
+		LEFT JOIN teams t ON sr.team_id = t.id
+		LEFT JOIN regions rg ON sr.region_id = rg.id
+		WHERE sr.id = $1 AND sr.status = $2
+		RETURNING sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+		          sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+		          sr.latitude, sr.longitude, sr.geocoded_address,
+		          sr.team_id, COALESCE(t.name, ''),
+		          sr.region_id, COALESCE(rg.name, ''),
+		          sr.created_at, sr.updated_at`
 
 	sr := &models.ServiceRequest{}
-	err := r.db.QueryRow(ctx, query, status, id).Scan(
-		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
+	err := r.db.QueryRow(ctx, query, id, status).Scan(
+		&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
-		&sr.TeamID, &sr.RegionID, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.TeamID, &sr.TeamName,
+		&sr.RegionID, &sr.RegionName,
+		&sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update service request status: %w", err)
 	}
 
-	if sr.UserID != nil {
-		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *sr.UserID).Scan(&sr.UserName)
-	}
-
 	if sr.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
-	}
-
-	// Fetch team name and region name
-	if sr.TeamID != nil {
-		r.db.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, *sr.TeamID).Scan(&sr.TeamName)
-	}
-	if sr.RegionID != nil {
-		r.db.QueryRow(ctx, `SELECT name FROM regions WHERE id = $1`, *sr.RegionID).Scan(&sr.RegionName)
 	}
 
 	return sr, nil
