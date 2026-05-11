@@ -362,7 +362,7 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 	                 sr.team_id, COALESCE(t.name, ''),
 	                 sr.region_id, COALESCE(rg.name, ''),
 	                 sr.created_at, sr.updated_at,
-	                 u.username, u.email, u.cpf, u.birth_date, u.type, u.created_at, u.updated_at
+	                 u.username, u.email, u.cpf, u.phone, u.birth_date, u.type, u.created_at, u.updated_at
 	          FROM service_requests sr
 	          LEFT JOIN users u ON sr.user_id = u.id
 	          LEFT JOIN teams t ON sr.team_id = t.id
@@ -390,7 +390,7 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 			&sr.TeamID, &sr.TeamName,
 			&sr.RegionID, &sr.RegionName,
 			&sr.CreatedAt, &sr.UpdatedAt,
-			&user.Username, &user.Email, &user.CPF, &bd, &user.Type, &user.CreatedAt, &user.UpdatedAt,
+			&user.Username, &user.Email, &user.CPF, &user.Phone, &bd, &user.Type, &user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -13,6 +13,7 @@ type User struct {
 	Email           string     `json:"email"`
 	FullName        *string    `json:"full_name,omitempty"`
 	CPF             *string    `json:"cpf,omitempty"`
+	Phone           *string    `json:"phone,omitempty"`
 	BirthDate       *string    `json:"birth_date,omitempty"`
 	Type            *string    `json:"type,omitempty"`
 	TeamID          *int64     `json:"team_id,omitempty"`
@@ -30,6 +31,7 @@ type CreateUserRequest struct {
 	FullName        *string  `json:"full_name,omitempty"`
 	CPF             *string  `json:"cpf,omitempty"`
 	BirthDate       *string  `json:"birth_date,omitempty"`
+	Phone           *string  `json:"phone,omitempty"`
 	Type            *string  `json:"type,omitempty"`
 	TeamID          *int64   `json:"team_id,omitempty"`
 	WorkArea        []string `json:"work_area,omitempty"`
@@ -68,6 +70,7 @@ type UpdateUserRequest struct {
 	FullName        *string  `json:"full_name,omitempty"`
 	CPF             *string  `json:"cpf,omitempty"`
 	BirthDate       *string  `json:"birth_date,omitempty"`
+	Phone           *string  `json:"phone,omitempty"`
 	Type            *string  `json:"type,omitempty"`
 	TeamID          *int64   `json:"team_id,omitempty"`
 	WorkArea        []string `json:"work_area,omitempty"`

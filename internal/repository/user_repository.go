@@ -37,9 +37,9 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	}
 
 	query := `
-		INSERT INTO users (username, password, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
+		INSERT INTO users (username, password, email, full_name, cpf, phone, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+		RETURNING id, username, email, full_name, cpf, phone, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
 
 	var birthDate *time.Time
 	if req.BirthDate != nil {
@@ -55,11 +55,11 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	var bd time.Time
 	err := r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
-		req.FullName, req.CPF, birthDate, req.Type,
+		req.FullName, req.CPF, req.Phone, birthDate, req.Type,
 		req.TeamID, workAreaJSON, req.ProfileImageURL,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &bd,
+		&user.FullName, &user.CPF, &user.Phone, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -79,7 +79,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 }
 
 func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error) {
-	query := `SELECT id, username, password, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at
+	query := `SELECT id, username, password, email, full_name, cpf, phone, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at
  FROM users WHERE username = $1 OR email = $1`
 
 	user := &models.User{}
@@ -87,7 +87,7 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 	var bd *time.Time
 	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
-		&user.FullName, &user.CPF, &bd,
+		&user.FullName, &user.CPF, &user.Phone, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -108,7 +108,7 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 
 func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
-		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
+		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
 		FROM users u
 		LEFT JOIN teams t ON u.team_id = t.id
@@ -127,7 +127,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &bd,
+		&user.FullName, &user.CPF, &user.Phone, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 		&tID, &tName, &tRegionID, &tRegionName, &tDesc, &tCreatedAt, &tUpdatedAt,
@@ -161,7 +161,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 
 func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
 	offset := (page - 1) * limit
-	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
+	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.description, t.region_id, COALESCE(rg.name, ''), t.created_at, t.updated_at
  FROM users u
  LEFT JOIN teams t ON u.team_id = t.id
@@ -208,7 +208,7 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		var bd *time.Time
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
-			&user.FullName, &user.CPF, &bd,
+			&user.FullName, &user.CPF, &user.Phone, &bd,
 			&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 			&user.CreatedAt, &user.UpdatedAt,
 			&tID, &tName, &tDesc, &tRegionID, &tRegionName, &tCreatedAt, &tUpdatedAt,
@@ -274,23 +274,24 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 			email = COALESCE($2, email),
 			full_name = COALESCE($3, full_name),
 			cpf = COALESCE($4, cpf),
-			birth_date = COALESCE($5, birth_date),
-			type = COALESCE($6, type),
-			team_id = COALESCE($7, team_id),
-			work_area = COALESCE($8, work_area),
-			profile_image_url = COALESCE($9, profile_image_url),
+			phone = COALESCE($5, phone),
+			birth_date = COALESCE($6, birth_date),
+			type = COALESCE($7, type),
+			team_id = COALESCE($8, team_id),
+			work_area = COALESCE($9, work_area),
+			profile_image_url = COALESCE($10, profile_image_url),
 			updated_at = NOW()
-		WHERE id = $10
-		RETURNING id, username, email, full_name, cpf, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
+		WHERE id = $11
+		RETURNING id, username, email, full_name, cpf, phone, birth_date, type, team_id, work_area, profile_image_url, created_at, updated_at`
 
 	user := &models.User{}
 	var workAreaResult []byte
 	var bd *time.Time
 	err := r.db.QueryRow(ctx, query,
-		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, workAreaJSON, req.ProfileImageURL, id,
+		req.Username, req.Email, req.FullName, req.CPF, req.Phone, birthDate, req.Type, req.TeamID, workAreaJSON, req.ProfileImageURL, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &bd,
+		&user.FullName, &user.CPF, &user.Phone, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
