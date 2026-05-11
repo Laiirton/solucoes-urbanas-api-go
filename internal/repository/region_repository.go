@@ -44,7 +44,6 @@ func (r *RegionRepository) GetByID(ctx context.Context, id int64) (*models.Regio
 }
 
 func (r *RegionRepository) List(ctx context.Context, search string, page, limit int) ([]*models.Region, error) {
-	offset := (page - 1) * limit
 	query := `SELECT id, name, neighborhoods, created_at, updated_at FROM regions`
 	var args []interface{}
 
@@ -53,8 +52,12 @@ func (r *RegionRepository) List(ctx context.Context, search string, page, limit 
 		args = append(args, "%"+search+"%")
 	}
 
-	query += fmt.Sprintf(` ORDER BY name ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY name ASC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

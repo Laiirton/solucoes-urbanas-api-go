@@ -134,7 +134,6 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 }
 
 func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
-	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -174,14 +173,17 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 		args = append(args, *regionFilter)
 	}
 
-	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY sr.id DESC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	return r.scanServiceRequests(ctx, query, args...)
 }
 
 func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context, userID int64, search, status string, regionFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
-	offset := (page - 1) * limit
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -210,8 +212,12 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 		args = append(args, *regionFilter)
 	}
 
-	query += fmt.Sprintf(` ORDER BY sr.id DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY sr.id DESC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	return r.scanServiceRequests(ctx, query, args...)
 }

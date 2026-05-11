@@ -57,7 +57,6 @@ func (r *TeamRepository) GetTeamByID(ctx context.Context, id int64) (*models.Tea
 }
 
 func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, limit int) ([]*models.Team, error) {
-	offset := (page - 1) * limit
 	query := `
 		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
 		FROM teams t
@@ -69,8 +68,12 @@ func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, lim
 		args = append(args, "%"+search+"%")
 	}
 
-	query += fmt.Sprintf(` ORDER BY t.id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY t.id ASC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

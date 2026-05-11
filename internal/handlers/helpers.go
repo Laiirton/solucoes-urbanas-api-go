@@ -14,6 +14,14 @@ func parseID(r *http.Request) (int64, error) {
 }
 
 func parsePagination(r *http.Request) (int, int) {
+	_, hasPage := r.URL.Query()["page"]
+	_, hasLimit := r.URL.Query()["limit"]
+
+	// No pagination params → return all records (sentinel: limit == 0)
+	if !hasPage && !hasLimit {
+		return 0, 0
+	}
+
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1

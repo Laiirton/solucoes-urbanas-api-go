@@ -33,7 +33,6 @@ func (r *NewsRepository) CreateNews(ctx context.Context, n *models.News) (*model
 }
 
 func (r *NewsRepository) ListNews(ctx context.Context, search string, status string, page, limit int) ([]*models.News, error) {
-	offset := (page - 1) * limit
 	query := `SELECT id, title, slug, summary, content, image_urls, status, category, tags, author_id, published_at, created_at, updated_at FROM news`
 
 	var args []interface{}
@@ -53,8 +52,12 @@ func (r *NewsRepository) ListNews(ctx context.Context, search string, status str
 	}
 
 	query += where
-	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY created_at DESC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

@@ -160,7 +160,6 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 }
 
 func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
-	offset := (page - 1) * limit
 	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.description, t.region_id, COALESCE(rg.name, ''), t.created_at, t.updated_at
  FROM users u
@@ -185,8 +184,12 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		args = append(args, userType)
 	}
 
-	query += fmt.Sprintf(` ORDER BY u.id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY u.id ASC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

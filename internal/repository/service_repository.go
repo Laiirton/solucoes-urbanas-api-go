@@ -65,7 +65,6 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 }
 
 func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string, allowedServices []int64) ([]*models.Service, error) {
-	offset := (page - 1) * limit
 	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
                FROM services`
 
@@ -105,8 +104,12 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 		args = append(args, "%"+search+"%")
 	}
 
-	query += fmt.Sprintf(` ORDER BY id ASC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY id ASC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

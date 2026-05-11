@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 )
@@ -62,10 +63,16 @@ func (r *ServiceRatingRepository) ListByServiceID(ctx context.Context, serviceID
 		FROM service_ratings r
 		JOIN users u ON r.user_id = u.id
 		WHERE r.service_id = $1
-		ORDER BY r.created_at DESC
-		LIMIT $2 OFFSET $3`
+		ORDER BY r.created_at DESC`
 
-	rows, err := r.db.Query(ctx, query, serviceID, limit, offset)
+	var rows pgx.Rows
+	var err error
+	if limit > 0 {
+		query += ` LIMIT $2 OFFSET $3`
+		rows, err = r.db.Query(ctx, query, serviceID, limit, offset)
+	} else {
+		rows, err = r.db.Query(ctx, query, serviceID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ratings: %w", err)
 	}

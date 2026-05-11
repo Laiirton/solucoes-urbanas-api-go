@@ -31,7 +31,6 @@ func (r *SystemNotificationRepository) Create(ctx context.Context, n *models.Sys
 }
 
 func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, notificationType string, unreadOnly bool, page, limit int) ([]*models.SystemNotification, error) {
-	offset := (page - 1) * limit
 	query := `SELECT id, user_id, title, body, type, data, read_at, created_at FROM system_notifications`
 
 	var args []interface{}
@@ -62,8 +61,12 @@ func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, 
 		}
 	}
 
-	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, limit, offset)
+	query += ` ORDER BY created_at DESC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
