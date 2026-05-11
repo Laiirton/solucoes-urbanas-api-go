@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // DefaultCityCoordinates - coordenadas padrão da cidade (Cacimbas-PB)
@@ -32,11 +33,21 @@ type GeocodingService struct {
 }
 
 func NewGeocodingService() *GeocodingService {
+	// Configure HTTP transport with connection pooling and timeouts
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		DisableCompression:    false,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
+
 	return &GeocodingService{
-		client:       &http.Client{Transport: tr},
+		client: &http.Client{
+			Transport: tr,
+			Timeout:   10 * time.Second, // Timeout for entire request
+		},
 		nominatimURL: "https://nominatim.openstreetmap.org/search",
 	}
 }

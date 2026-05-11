@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -20,7 +21,23 @@ type DB struct {
 }
 
 func Connect(databaseURL string) (*DB, error) {
-	pool, err := pgxpool.New(context.Background(), databaseURL)
+	// Parse config with performance-optimized settings
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse database config: %w", err)
+	}
+
+	// Connection pool optimization
+	config.MaxConns = 25                              // Max connections
+	config.MinConns = 5                              // Min idle connections
+	config.MaxConnLifetime = time.Hour               // Max lifetime of a connection
+	config.MaxConnIdleTime = 30 * time.Minute        // Max idle time before closing
+	config.HealthCheckPeriod = time.Minute           // Period between health checks
+
+	// Statement cache for better performance
+	config.ConnConfig.RuntimeParams["statement_cache"] = "describe"
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
@@ -29,7 +46,8 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	log.Println("Connected to database successfully")
+	log.Printf("Database connection pool configured: min=%d, max=%d, max_lifetime=%v", 
+		config.MinConns, config.MaxConns, config.MaxConnLifetime)
 	return &DB{Pool: pool}, nil
 }
 

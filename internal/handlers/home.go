@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -51,10 +52,10 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		for _, sr := range list {
 			var lat, lon float64
-			var found bool
 			var geoAddr string
+			found := false
 
-			// Use persisted coordinates if available
+			// Use persisted coordinates if available (FAST PATH)
 			if sr.Latitude != nil && sr.Longitude != nil {
 				lat = *sr.Latitude
 				lon = *sr.Longitude
@@ -63,36 +64,31 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 					geoAddr = *sr.GeocodedAddress
 				}
 			} else {
-				// Geocode and save to DB
+				// FALLBACK: Use address from request data without geocoding
+				// Geocoding is now done asynchronously in background
 				address := extractAddressFromRequestData(sr.RequestData)
 				if address != "" {
-					geoResult, _ := h.geoService.GeocodeAddress(address)
-					if geoResult.Found {
-						lat = geoResult.Latitude
-						lon = geoResult.Longitude
-						found = true
-						geoAddr = geoResult.DisplayName
-						// Save to DB
-						h.srRepo.SaveGeocoding(r.Context(), sr.ID, lat, lon, geoAddr)
-					}
+					geoAddr = address
+					// Trigger async geocoding for future requests (fire-and-forget)
+					go h.asyncGeocodeRequest(sr.ID, address)
 				}
 			}
 
-			if found {
+			if found || geoAddr != "" {
 				icon := ""
 				if sr.ServiceID != nil {
 					icon = models.GetServiceIcon(*sr.ServiceID)
 				}
 
 				resp.MapLocations = append(resp.MapLocations, models.MapLocation{
-					ID:           sr.ID,
-					Address:      geoAddr,
-					Latitude:     lat,
-					Longitude:    lon,
+					ID: sr.ID,
+					Address: geoAddr,
+					Latitude: lat,
+					Longitude: lon,
 					ServiceTitle: sr.ServiceTitle,
-					Status:       sr.Status,
-					Icon:         icon,
-					Found:        true,
+					Status: sr.Status,
+					Icon: icon,
+					Found: found,
 				})
 			}
 		}
@@ -100,4 +96,16 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// asyncGeocodeRequest performs geocoding in background to avoid blocking the response
+func (h *HomeHandler) asyncGeocodeRequest(id int64, address string) {
+	geoResult, err := h.geoService.GeocodeAddress(address)
+	if err != nil || !geoResult.Found {
+		return // Silent fail - will retry on next request
+	}
+	
+	// Save to database for future requests
+	ctx := context.Background()
+	h.srRepo.SaveGeocoding(ctx, id, geoResult.Latitude, geoResult.Longitude, geoResult.DisplayName)
 }

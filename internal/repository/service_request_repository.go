@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"time"
 
@@ -54,21 +55,20 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
-	// Single JOIN query to fetch team name, region name, and user name together
-	if sr.TeamID != nil && sr.RegionID != nil && userID != nil {
-		r.db.QueryRow(ctx, `
-			SELECT COALESCE(u.full_name, ''), COALESCE(t.name, ''), COALESCE(rg.name, '')
-			FROM service_requests sr
-			LEFT JOIN users u ON sr.user_id = u.id
-			LEFT JOIN teams t ON sr.team_id = t.id
-			LEFT JOIN regions rg ON sr.region_id = rg.id
-			WHERE sr.id = $1`, sr.ID).Scan(&sr.UserName, &sr.TeamName, &sr.RegionName)
-	} else if sr.TeamID != nil {
-		r.db.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, *sr.TeamID).Scan(&sr.TeamName)
-	} else if sr.RegionID != nil {
-		r.db.QueryRow(ctx, `SELECT name FROM regions WHERE id = $1`, *sr.RegionID).Scan(&sr.RegionName)
-	} else if userID != nil {
-		r.db.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, *userID).Scan(&sr.UserName)
+	// Single optimized query to fetch all related data (user, team, region names)
+	// This avoids N+1 queries by fetching everything in one go
+	query := `
+		SELECT COALESCE(u.full_name, ''), COALESCE(t.name, ''), COALESCE(rg.name, '')
+		FROM service_requests sr
+		LEFT JOIN users u ON sr.user_id = u.id
+		LEFT JOIN teams t ON sr.team_id = t.id
+		LEFT JOIN regions rg ON sr.region_id = rg.id
+		WHERE sr.id = $1`
+	
+	err = r.db.QueryRow(ctx, query, sr.ID).Scan(&sr.UserName, &sr.TeamName, &sr.RegionName)
+	if err != nil {
+		// Log error but don't fail - the request was created successfully
+		log.Printf("Warning: failed to fetch related data for service request %d: %v", sr.ID, err)
 	}
 
 	if req.ServiceID != nil {

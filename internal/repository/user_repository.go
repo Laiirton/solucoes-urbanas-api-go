@@ -186,8 +186,8 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		var tDesc *string
 		var tRegionID *int64
 		var tRegionName string
-		var tCreatedAt time.Time
-		var tUpdatedAt time.Time
+		var tCreatedAt *time.Time
+		var tUpdatedAt *time.Time
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
 			&user.FullName, &user.CPF, &user.BirthDate,
@@ -211,8 +211,8 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 				Description: tDesc,
 				RegionID:    tRegionID,
 				RegionName:  tRegionName,
-				CreatedAt:   tCreatedAt,
-				UpdatedAt:   tUpdatedAt,
+				CreatedAt:   *tCreatedAt,
+				UpdatedAt:   *tUpdatedAt,
 			}
 		}
 
