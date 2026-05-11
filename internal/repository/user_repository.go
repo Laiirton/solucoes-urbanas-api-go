@@ -14,6 +14,14 @@ type UserRepository struct {
 	db *pgxpool.Pool
 }
 
+func formatBirthDate(bd *time.Time) *string {
+	if bd == nil {
+		return nil
+	}
+	s := bd.Format("02/01/2006")
+	return &s
+}
+
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
@@ -44,19 +52,22 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 
 	user := &models.User{}
 	var workAreaResult []byte
+	var bd time.Time
 	err := r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
 		req.FullName, req.CPF, birthDate, req.Type,
 		req.TeamID, workAreaJSON, req.ProfileImageURL,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &user.BirthDate,
+		&user.FullName, &user.CPF, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
+
+	user.BirthDate = formatBirthDate(&bd)
 
 	if workAreaResult != nil {
 		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
@@ -73,15 +84,18 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 
 	user := &models.User{}
 	var workAreaResult []byte
+	var bd *time.Time
 	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Username, &user.Password, &user.Email,
-		&user.FullName, &user.CPF, &user.BirthDate,
+		&user.FullName, &user.CPF, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
+
+	user.BirthDate = formatBirthDate(bd)
 
 	if workAreaResult != nil {
 		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
@@ -109,10 +123,11 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	var tDesc *string
 	var tCreatedAt, tUpdatedAt *time.Time
 	var workAreaResult []byte
+	var bd *time.Time
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &user.BirthDate,
+		&user.FullName, &user.CPF, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 		&tID, &tName, &tRegionID, &tRegionName, &tDesc, &tCreatedAt, &tUpdatedAt,
@@ -120,6 +135,8 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
+
+	user.BirthDate = formatBirthDate(bd)
 
 	if workAreaResult != nil {
 		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
@@ -188,15 +205,18 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 		var tRegionName string
 		var tCreatedAt *time.Time
 		var tUpdatedAt *time.Time
+		var bd *time.Time
 		if err := rows.Scan(
 			&user.ID, &user.Username, &user.Email,
-			&user.FullName, &user.CPF, &user.BirthDate,
+			&user.FullName, &user.CPF, &bd,
 			&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 			&user.CreatedAt, &user.UpdatedAt,
 			&tID, &tName, &tDesc, &tRegionID, &tRegionName, &tCreatedAt, &tUpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
+
+		user.BirthDate = formatBirthDate(bd)
 
 		if workAreaResult != nil {
 			if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {
@@ -265,17 +285,20 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 
 	user := &models.User{}
 	var workAreaResult []byte
+	var bd *time.Time
 	err := r.db.QueryRow(ctx, query,
 		req.Username, req.Email, req.FullName, req.CPF, birthDate, req.Type, req.TeamID, workAreaJSON, req.ProfileImageURL, id,
 	).Scan(
 		&user.ID, &user.Username, &user.Email,
-		&user.FullName, &user.CPF, &user.BirthDate,
+		&user.FullName, &user.CPF, &bd,
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
+
+	user.BirthDate = formatBirthDate(bd)
 
 	if workAreaResult != nil {
 		if err := json.Unmarshal(workAreaResult, &user.WorkArea); err != nil {

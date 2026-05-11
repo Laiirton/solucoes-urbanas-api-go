@@ -13,7 +13,7 @@ type User struct {
 	Email           string     `json:"email"`
 	FullName        *string    `json:"full_name,omitempty"`
 	CPF             *string    `json:"cpf,omitempty"`
-	BirthDate       *time.Time `json:"birth_date,omitempty"`
+	BirthDate       *string    `json:"birth_date,omitempty"`
 	Type            *string    `json:"type,omitempty"`
 	TeamID          *int64     `json:"team_id,omitempty"`
 	Team            *Team      `json:"team,omitempty"`

@@ -382,6 +382,7 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 		sr := &models.ServiceRequest{}
 		user := &models.User{}
 		var uID *int64
+		var bd *time.Time
 		if err := rows.Scan(
 			&sr.ID, &uID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
 			&sr.ServiceTitle, &sr.Category, &sr.RequestData,
@@ -389,10 +390,11 @@ func (r *ServiceRequestRepository) ListServiceRequestDetailsByService(ctx contex
 			&sr.TeamID, &sr.TeamName,
 			&sr.RegionID, &sr.RegionName,
 			&sr.CreatedAt, &sr.UpdatedAt,
-			&user.Username, &user.Email, &user.CPF, &user.BirthDate, &user.Type, &user.CreatedAt, &user.UpdatedAt,
+			&user.Username, &user.Email, &user.CPF, &bd, &user.Type, &user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
+		user.BirthDate = formatBirthDate(bd)
 		sr.UserID = uID
 
 		if sr.ServiceID != nil {
