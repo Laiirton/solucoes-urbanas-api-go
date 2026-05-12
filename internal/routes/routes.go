@@ -101,7 +101,7 @@ func Setup(
 		r.Get("/categories", categoryHandler.ListCategories)
 		r.Get("/categories/{id}", categoryHandler.GetCategory)
 
-		// Protected routes
+		// Protected routes — any authenticated user
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(jwtSecret))
 
@@ -112,56 +112,12 @@ func Setup(
 			// Home
 			r.Get("/home", homeHandler.Index)
 
-			// Users
-			r.Get("/users", userHandler.ListUsers)
-			r.Post("/users", userHandler.CreateUser)
-			r.Get("/users/me", userHandler.GetMe)
-			r.Get("/users/{id}", userHandler.GetUser)
-			r.Put("/users/{id}", userHandler.UpdateUser)
-			r.Delete("/users/{id}", userHandler.DeleteUser)
-			r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
-			r.Delete("/users/{id}/profile-image", userHandler.DeleteProfileImage)
-
-			// Services (write)
-			r.Post("/services", serviceHandler.CreateService)
-			r.Put("/services/{id}", serviceHandler.UpdateService)
-			r.Delete("/services/{id}", serviceHandler.DeleteService)
-
-			// News (write)
-			r.Post("/news", newsHandler.CreateNews)
-			r.Post("/news/upload-image", newsHandler.UploadImage)
-			r.Put("/news/{id}", newsHandler.UpdateNews)
-			r.Delete("/news/{id}", newsHandler.DeleteNews)
-
-			// Notifications
-			r.Post("/notifications/push-tokens", notificationHandler.RegisterPushToken)
-			r.Get("/notifications", notificationHandler.ListSystemNotifications)
-			r.Post("/notifications", notificationHandler.CreateSystemNotification)
-			r.Get("/notifications/{id}", notificationHandler.GetSystemNotification)
-			r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
-			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
-			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
-
-			// Regions
-			r.Get("/regions", regionHandler.List)
-			r.Post("/regions", regionHandler.Create)
-			r.Get("/regions/{id}", regionHandler.Get)
-			r.Put("/regions/{id}", regionHandler.Update)
-			r.Delete("/regions/{id}", regionHandler.Delete)
-			r.Get("/regions/bairro/{bairro}", regionHandler.FindByBairro)
-
-			// Teams
-			r.Get("/teams", teamHandler.ListTeams)
-			r.Post("/teams", teamHandler.CreateTeam)
-			r.Get("/teams/{id}", teamHandler.GetTeam)
-			r.Put("/teams/{id}", teamHandler.UpdateTeam)
-			r.Delete("/teams/{id}", teamHandler.DeleteTeam)
+			// Team members (admin or secretary of the team — checked in handler)
 			r.Get("/teams/{id}/members", teamHandler.ListTeamMembers)
 			r.Post("/teams/{id}/members", teamHandler.AddTeamMember)
 			r.Delete("/teams/{id}/members/{userId}", teamHandler.RemoveTeamMember)
-			r.Get("/teams/{id}/stats", teamHandler.GetTeamDashboard)
 
-			// Service Requests
+			// Service Requests — all authenticated users can create and view
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
 			r.Get("/service-requests", srHandler.ListServiceRequests)
 			r.Route("/service-requests/{id}", func(r chi.Router) {
@@ -181,18 +137,71 @@ func Setup(
 			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)
 			r.Get("/geocode-service-requests/{id}", srHandler.GeocodeServiceRequest)
 
-			// App Configuration (Admin)
-			r.Put("/app/settings/{key}", appConfigHandler.UpdateSetting)
-			r.Post("/app/upload-image", appConfigHandler.UploadImage)
-			r.Get("/app/banners", appConfigHandler.ListBanners)
-			r.Post("/app/banners", appConfigHandler.CreateBanner)
-			r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
-			r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
+			// Notifications
+			r.Post("/notifications/push-tokens", notificationHandler.RegisterPushToken)
+			r.Get("/notifications", notificationHandler.ListSystemNotifications)
+			r.Post("/notifications", notificationHandler.CreateSystemNotification)
+			r.Get("/notifications/{id}", notificationHandler.GetSystemNotification)
+			r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
+			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
+			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
 
-			// Categories (admin write)
-			r.Post("/categories", categoryHandler.CreateCategory)
-			r.Put("/categories/{id}", categoryHandler.UpdateCategory)
-			r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+			// News write — Admin OR Marketing
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole(userRepo, "admin", "marketing"))
+				r.Post("/news", newsHandler.CreateNews)
+				r.Post("/news/upload-image", newsHandler.UploadImage)
+				r.Put("/news/{id}", newsHandler.UpdateNews)
+				r.Delete("/news/{id}", newsHandler.DeleteNews)
+			})
+
+			// Admin-only routes
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole(userRepo, "admin"))
+
+				// Users
+				r.Get("/users", userHandler.ListUsers)
+				r.Post("/users", userHandler.CreateUser)
+				r.Get("/users/{id}", userHandler.GetUser)
+				r.Put("/users/{id}", userHandler.UpdateUser)
+				r.Delete("/users/{id}", userHandler.DeleteUser)
+				r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
+				r.Delete("/users/{id}/profile-image", userHandler.DeleteProfileImage)
+
+				// Regions
+				r.Get("/regions", regionHandler.List)
+				r.Post("/regions", regionHandler.Create)
+				r.Get("/regions/{id}", regionHandler.Get)
+				r.Put("/regions/{id}", regionHandler.Update)
+				r.Delete("/regions/{id}", regionHandler.Delete)
+				r.Get("/regions/bairro/{bairro}", regionHandler.FindByBairro)
+
+				// Teams (CRUD — members are in the general group above for secretary access)
+				r.Get("/teams", teamHandler.ListTeams)
+				r.Post("/teams", teamHandler.CreateTeam)
+				r.Get("/teams/{id}", teamHandler.GetTeam)
+				r.Put("/teams/{id}", teamHandler.UpdateTeam)
+				r.Delete("/teams/{id}", teamHandler.DeleteTeam)
+				r.Get("/teams/{id}/stats", teamHandler.GetTeamDashboard)
+
+				// Services (write)
+				r.Post("/services", serviceHandler.CreateService)
+				r.Put("/services/{id}", serviceHandler.UpdateService)
+				r.Delete("/services/{id}", serviceHandler.DeleteService)
+
+				// App Configuration
+				r.Put("/app/settings/{key}", appConfigHandler.UpdateSetting)
+				r.Post("/app/upload-image", appConfigHandler.UploadImage)
+				r.Get("/app/banners", appConfigHandler.ListBanners)
+				r.Post("/app/banners", appConfigHandler.CreateBanner)
+				r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
+				r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
+
+				// Categories (write)
+				r.Post("/categories", categoryHandler.CreateCategory)
+				r.Put("/categories/{id}", categoryHandler.UpdateCategory)
+				r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+			})
 		})
 	})
 

@@ -133,7 +133,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter, teamFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -171,6 +171,16 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 			query += ` WHERE sr.region_id = $1`
 		}
 		args = append(args, *regionFilter)
+		whereApplied = true
+	}
+
+	if teamFilter != nil {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.team_id = $%d`, len(args)+1)
+		} else {
+			query += ` WHERE sr.team_id = $1`
+		}
+		args = append(args, *teamFilter)
 	}
 
 	query += ` ORDER BY sr.id DESC`
@@ -210,6 +220,40 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 	if regionFilter != nil {
 		query += fmt.Sprintf(` AND sr.region_id = $%d`, len(args)+1)
 		args = append(args, *regionFilter)
+	}
+
+	query += ` ORDER BY sr.id DESC`
+	if limit > 0 {
+		offset := (page - 1) * limit
+		query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	}
+
+	return r.scanServiceRequests(ctx, query, args...)
+}
+
+func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context, teamID int64, search, status string, page, limit int) ([]*models.ServiceRequest, error) {
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id
+	          WHERE sr.team_id = $1`
+
+	args := []interface{}{teamID}
+	if search != "" {
+		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
+		args = append(args, "%"+search+"%")
+	}
+
+	if status != "" {
+		query += fmt.Sprintf(` AND sr.status = $%d`, len(args)+1)
+		args = append(args, status)
 	}
 
 	query += ` ORDER BY sr.id DESC`
@@ -464,13 +508,16 @@ func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, se
 	return result, nil
 }
 
-func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter *int64) (*models.HomeResponse, error) {
+func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter, teamFilter *int64) (*models.HomeResponse, error) {
 	baseWhere := ""
 	var args []interface{}
 
 	if !isAdmin {
 		baseWhere = "WHERE sr.user_id = $1"
 		args = append(args, userID)
+	} else if teamFilter != nil {
+		baseWhere = "WHERE sr.team_id = $1"
+		args = append(args, *teamFilter)
 	} else if regionFilter != nil {
 		baseWhere = "WHERE sr.region_id = $1"
 		args = append(args, *regionFilter)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
+	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
 
 type contextKey string
@@ -50,6 +51,35 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 
 			ctx := context.WithValue(r.Context(), UserIDKey, int64(userID))
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// RequireRole returns middleware that restricts access to users with one of the specified roles.
+// It fetches the user from DB to check the type. The user must be authenticated first (via Auth middleware).
+func RequireRole(userRepo *repository.UserRepository, roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID, ok := r.Context().Value(UserIDKey).(int64)
+			if !ok {
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized"})
+				return
+			}
+
+			user, err := userRepo.GetUserByID(r.Context(), userID)
+			if err != nil || user.Type == nil {
+				respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "forbidden"})
+				return
+			}
+
+			for _, role := range roles {
+				if *user.Type == role {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "forbidden"})
 		})
 	}
 }

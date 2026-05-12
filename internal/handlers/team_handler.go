@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
@@ -141,6 +142,12 @@ func (h *TeamHandler) AddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+		respondError(w, http.StatusForbidden, "only admins or the team secretary can manage members")
+		return
+	}
+
 	var req struct {
 		UserID int64 `json:"user_id"`
 	}
@@ -167,6 +174,12 @@ func (h *TeamHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 	teamID, err := parseID(r)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid team id")
+		return
+	}
+
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, teamID) {
+		respondError(w, http.StatusForbidden, "only admins or the team secretary can manage members")
 		return
 	}
 
