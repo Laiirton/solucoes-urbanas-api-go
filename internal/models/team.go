@@ -49,6 +49,6 @@ type TeamMember struct {
 
 type MyTeamResponse struct {
 	Team       Team    `json:"team"`
-	Secretary  *User   `json:"secretary"`
+	Secretary  *User   `json:"secretary,omitempty"`
 	Attendants []*User `json:"attendants"`
 }
