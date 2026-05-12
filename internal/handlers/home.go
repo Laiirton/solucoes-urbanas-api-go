@@ -39,8 +39,8 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isAdmin := user.Type != nil && *user.Type == "admin"
-	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
-	teamFilter := GetTeamFilterForUser(r.Context(), h.userRepo, userID)
+	regionFilter := GetRegionFilterForUser(user)
+	teamFilter := GetTeamFilterForUserForUser(user)
 
 	startDate := r.URL.Query().Get("start_date")
 	endDate := r.URL.Query().Get("end_date")

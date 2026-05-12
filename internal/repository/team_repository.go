@@ -228,38 +228,64 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 
 	stats := &models.TeamStats{Team: *team}
 
-	r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE team_id = $1`, teamID).Scan(&stats.MemberCount)
+	// Consolidated query: member_count + status stats + avg resolution days in 1 round trip
+	consolidatedQuery := `
+		SELECT
+			(SELECT COUNT(*) FROM users WHERE team_id = $1) AS member_count,
+			COUNT(*) AS total_requests,
+			COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+			COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress,
+			COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+			COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+			COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::numeric, 1)
+				FILTER (WHERE status = 'completed'), 0) AS avg_days
+		FROM service_requests
+		WHERE team_id = $1`
 
-	rows, err := r.db.Query(ctx, `
-		SELECT status, COUNT(*) FROM service_requests
-		WHERE team_id = $1 GROUP BY status`, teamID)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var status string
-			var count int
-			if err := rows.Scan(&status, &count); err != nil {
-				continue
-			}
-			stats.TotalRequests += count
-			switch status {
-			case "pending":
-				stats.PendingRequests = count
-			case "in_progress":
-				stats.InProgressRequests = count
-			case "completed":
-				stats.CompletedRequests = count
-			case "cancelled":
-				stats.CancelledRequests = count
+	err = r.db.QueryRow(ctx, consolidatedQuery, teamID).Scan(
+		&stats.MemberCount,
+		&stats.TotalRequests,
+		&stats.PendingRequests,
+		&stats.InProgressRequests,
+		&stats.CompletedRequests,
+		&stats.CancelledRequests,
+		&stats.AvgResolutionDays,
+	)
+	if err != nil {
+		// Fallback to individual queries
+		r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE team_id = $1`, teamID).Scan(&stats.MemberCount)
+
+		rows, err := r.db.Query(ctx, `
+			SELECT status, COUNT(*) FROM service_requests
+			WHERE team_id = $1 GROUP BY status`, teamID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var status string
+				var count int
+				if err := rows.Scan(&status, &count); err != nil {
+					continue
+				}
+				stats.TotalRequests += count
+				switch status {
+				case "pending":
+					stats.PendingRequests = count
+				case "in_progress":
+					stats.InProgressRequests = count
+				case "completed":
+					stats.CompletedRequests = count
+				case "cancelled":
+					stats.CancelledRequests = count
+				}
 			}
 		}
-	}
 
-	r.db.QueryRow(ctx, `
-		SELECT COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::numeric, 1), 0)
-		FROM service_requests
-		WHERE team_id = $1 AND status = 'completed'`, teamID,
-	).Scan(&stats.AvgResolutionDays)
+		r.db.QueryRow(ctx, `
+			SELECT COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::numeric, 1), 0)
+			FROM service_requests
+			WHERE team_id = $1 AND status = 'completed'`, teamID,
+		).Scan(&stats.AvgResolutionDays)
+	}
 
 	if stats.TotalRequests > 0 {
 		stats.CompletionRate = float64(stats.CompletedRequests) / float64(stats.TotalRequests) * 100

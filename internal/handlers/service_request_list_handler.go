@@ -21,12 +21,17 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	status := r.URL.Query().Get("status")
 	page, limit := parsePagination(r)
 
-	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
-	teamFilter := GetTeamFilterForUser(r.Context(), h.userRepo, userID)
-	userRole := GetUserRole(r.Context(), h.userRepo, userID)
+	user, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	regionFilter := GetRegionFilterForUser(user)
+	teamFilter := GetTeamFilterForUserForUser(user)
+	userRole := GetUserRoleForUser(user)
 
 	var list []*models.ServiceRequest
-	var err error
 
 	if teamFilter != nil && userRole != nil && *userRole == "attendant" {
 		list, err = h.srRepo.ListServiceRequestsByTeam(r.Context(), *teamFilter, search, status, page, limit)
@@ -91,11 +96,16 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 	search := r.URL.Query().Get("search")
 	page, limit := parsePagination(r)
 
-	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
-	teamFilter := GetTeamFilterForUser(r.Context(), h.userRepo, userID)
+	user, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	regionFilter := GetRegionFilterForUser(user)
+	teamFilter := GetTeamFilterForUserForUser(user)
 
 	var list []*models.ServiceRequest
-	var err error
 	if r.URL.Query().Get("all") == "true" {
 		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", regionFilter, teamFilter, nil, nil, page, limit)
 	} else {
@@ -106,38 +116,30 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 		return
 	}
 
-	type MapLocation struct {
-		ID           int64   `json:"id"`
-		Address      string  `json:"address"`
-		Latitude     float64 `json:"latitude"`
-		Longitude    float64 `json:"longitude"`
-		ServiceTitle string  `json:"service_title"`
-		Status       string  `json:"status"`
-		Icon         string  `json:"icon"`
-		Found        bool    `json:"found"`
-	}
-
-	var locations []MapLocation
+	// Use stored coordinates from database instead of re-geocoding
+	var locations []models.MapLocation
 	for _, sr := range list {
-		address := extractAddressFromRequestData(sr.RequestData)
-		geoResult, _ := h.geoService.GeocodeAddress(address)
-
-		if geoResult.Found {
-			icon := ""
-			if sr.ServiceID != nil {
-				icon = models.GetServiceIcon(*sr.ServiceID)
-			}
-			locations = append(locations, MapLocation{
-				ID:           sr.ID,
-				Address:      address,
-				Latitude:     geoResult.Latitude,
-				Longitude:    geoResult.Longitude,
-				ServiceTitle: sr.ServiceTitle,
-				Status:       sr.Status,
-				Icon:         icon,
-				Found:        geoResult.Found,
-			})
+		if sr.Latitude == nil || sr.Longitude == nil {
+			continue
 		}
+		icon := ""
+		if sr.ServiceID != nil {
+			icon = models.GetServiceIcon(*sr.ServiceID)
+		}
+		address := ""
+		if sr.GeocodedAddress != nil {
+			address = *sr.GeocodedAddress
+		}
+		locations = append(locations, models.MapLocation{
+			ID:           sr.ID,
+			Address:      address,
+			Latitude:     *sr.Latitude,
+			Longitude:    *sr.Longitude,
+			ServiceTitle: sr.ServiceTitle,
+			Status:       sr.Status,
+			Icon:         icon,
+			Found:        true,
+		})
 	}
 
 	respondJSON(w, http.StatusOK, locations)

@@ -17,9 +17,9 @@ func parsePagination(r *http.Request) (int, int) {
 	_, hasPage := r.URL.Query()["page"]
 	_, hasLimit := r.URL.Query()["limit"]
 
-	// No pagination params → return all records (sentinel: limit == 0)
+	// No pagination params → return default page 1, limit 20
 	if !hasPage && !hasLimit {
-		return 0, 0
+		return 1, 20
 	}
 
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -29,6 +29,9 @@ func parsePagination(r *http.Request) (int, int) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit < 1 {
 		limit = 10
+	}
+	if limit > 200 {
+		limit = 200
 	}
 	return page, limit
 }

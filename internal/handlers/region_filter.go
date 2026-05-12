@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 
+	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
 
@@ -14,18 +15,20 @@ func GetRegionFilterForAdmin(ctx context.Context, userRepo *repository.UserRepos
 	if err != nil {
 		return nil
 	}
+	return GetRegionFilterForUser(user)
+}
 
+// GetRegionFilterForUser is the User-variant that avoids a redundant DB fetch.
+func GetRegionFilterForUser(user *models.User) *int64 {
 	isAdmin := user.Type != nil && *user.Type == "admin"
 	if !isAdmin {
 		return nil
 	}
 
-	// Admin with a team → filter by the team's region
 	if user.Team != nil && user.Team.RegionID != nil {
 		return user.Team.RegionID
 	}
 
-	// Admin without team → no filter
 	return nil
 }
 
@@ -35,6 +38,11 @@ func GetUserRole(ctx context.Context, userRepo *repository.UserRepository, userI
 	if err != nil {
 		return nil
 	}
+	return GetUserRoleForUser(user)
+}
+
+// GetUserRoleForUser is the User-variant that avoids a redundant DB fetch.
+func GetUserRoleForUser(user *models.User) *string {
 	return user.Type
 }
 
@@ -45,29 +53,28 @@ func GetTeamFilterForUser(ctx context.Context, userRepo *repository.UserReposito
 	if err != nil {
 		return nil
 	}
+	return GetTeamFilterForUserForUser(user)
+}
 
-	// Only apply team filter for attendant and secretary
+// GetTeamFilterForUserForUser is the User-variant that avoids a redundant DB fetch.
+func GetTeamFilterForUserForUser(user *models.User) *int64 {
 	if user.Type == nil || (*user.Type != "attendant" && *user.Type != "secretary") {
 		return nil
 	}
-
 	return user.TeamID
 }
 
 // CanManageTeam checks if the user is admin OR the secretary/admin of the specified team.
-// Used for team member management.
 func CanManageTeam(ctx context.Context, userRepo *repository.UserRepository, userID, teamID int64) bool {
 	user, err := userRepo.GetUserByID(ctx, userID)
 	if err != nil || user.Type == nil {
 		return false
 	}
 
-	// Admin can manage any team
 	if *user.Type == "admin" {
 		return true
 	}
 
-	// Secretary can manage their own team
 	if *user.Type == "secretary" && user.TeamID != nil && *user.TeamID == teamID {
 		return true
 	}

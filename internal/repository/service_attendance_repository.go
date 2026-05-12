@@ -27,13 +27,16 @@ func (r *ServiceAttendanceRepository) Create(ctx context.Context, attendantID in
 	query := `
 		INSERT INTO service_attendances (service_request_id, attended_by, notes, attachments, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		RETURNING id, service_request_id, attended_by, notes, attachments, created_at, updated_at`
+		RETURNING id, service_request_id, attended_by,
+		          (SELECT COALESCE(full_name, '') FROM users WHERE id = $2),
+		          notes, attachments, created_at, updated_at`
 
 	attendance := &models.ServiceAttendance{}
 	err = tx.QueryRow(ctx, query,
 		req.ServiceRequestID, attendantID, req.Notes, req.Attachments,
 	).Scan(
 		&attendance.ID, &attendance.ServiceRequestID, &attendance.AttendedBy,
+		&attendance.AttendantName,
 		&attendance.Notes, &attendance.Attachments, &attendance.CreatedAt, &attendance.UpdatedAt,
 	)
 	if err != nil {
@@ -51,9 +54,6 @@ func (r *ServiceAttendanceRepository) Create(ctx context.Context, attendantID in
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-
-	// Fetch attendant name
-	tx.QueryRow(ctx, `SELECT full_name FROM users WHERE id = $1`, attendantID).Scan(&attendance.AttendantName)
 
 	return attendance, nil
 }

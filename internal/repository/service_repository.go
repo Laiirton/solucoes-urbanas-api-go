@@ -29,7 +29,7 @@ func (r *ServiceRepository) CreateService(ctx context.Context, req *models.Creat
 
 	query := `
 		INSERT INTO services (title, description, category, category_id, form_schema, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
 		RETURNING id, title, description, category, category_id, form_schema, is_active, created_at, updated_at`
 
 	svc := &models.Service{}
@@ -97,9 +97,9 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 
 	if search != "" {
 		if whereApplied {
-			query += ` AND (CAST(id AS TEXT) ILIKE $1 OR title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
+			query += ` AND (title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
 		} else {
-			query += ` WHERE (CAST(id AS TEXT) ILIKE $1 OR title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
+			query += ` WHERE (title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
 		}
 		args = append(args, "%"+search+"%")
 	}

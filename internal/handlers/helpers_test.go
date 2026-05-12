@@ -95,7 +95,7 @@ func TestParsePaginationDefault(t *testing.T) {
 	if page != 1 {
 		t.Errorf("expected default page 1, got %d", page)
 	}
-	if limit != 10 {
-		t.Errorf("expected default limit 10, got %d", limit)
+	if limit != 20 {
+		t.Errorf("expected default limit 20, got %d", limit)
 	}
 }

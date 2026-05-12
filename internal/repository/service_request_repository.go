@@ -2,10 +2,7 @@ package repository
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"log"
-	"math/big"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -30,13 +27,18 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("service not found or inactive: %w", err)
 	}
 
+	// Single INSERT with subqueries in RETURNING to fetch related names
 	insertQuery := `
 		INSERT INTO service_requests
 			(user_id, service_id, service_title, category, request_data, attachments, status, team_id, region_id, latitude, longitude, geocoded_address, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, NOW(), NOW())
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
 		          request_data, attachments, status, latitude, longitude, geocoded_address,
-		          team_id, region_id, created_at, updated_at`
+		          team_id, region_id,
+		          (SELECT COALESCE(full_name, '') FROM users WHERE id = $1),
+		          (SELECT COALESCE(name, '') FROM teams WHERE id = $7),
+		          (SELECT COALESCE(name, '') FROM regions WHERE id = $8),
+		          created_at, updated_at`
 
 	sr := &models.ServiceRequest{}
 	err = r.db.QueryRow(ctx, insertQuery,
@@ -47,54 +49,30 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		&sr.ID, &sr.UserID, &sr.ServiceID, &sr.ProtocolNumber,
 		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
 		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
-		&sr.TeamID, &sr.RegionID, &sr.CreatedAt, &sr.UpdatedAt,
+		&sr.TeamID, &sr.RegionID,
+		&sr.UserName, &sr.TeamName, &sr.RegionName,
+		&sr.CreatedAt, &sr.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service request: %w", err)
-	}
-
-	// Single optimized query to fetch all related data (user, team, region names)
-	// This avoids N+1 queries by fetching everything in one go
-	query := `
-		SELECT COALESCE(u.full_name, ''), COALESCE(t.name, ''), COALESCE(rg.name, '')
-		FROM service_requests sr
-		LEFT JOIN users u ON sr.user_id = u.id
-		LEFT JOIN teams t ON sr.team_id = t.id
-		LEFT JOIN regions rg ON sr.region_id = rg.id
-		WHERE sr.id = $1`
-	
-	err = r.db.QueryRow(ctx, query, sr.ID).Scan(&sr.UserName, &sr.TeamName, &sr.RegionName)
-	if err != nil {
-		// Log error but don't fail - the request was created successfully
-		log.Printf("Warning: failed to fetch related data for service request %d: %v", sr.ID, err)
 	}
 
 	if req.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*req.ServiceID)
 	}
 
-	// Generate a unique 8-digit random protocol number
-	var finalProtocol string
-	var lastErr error
-	for i := 0; i < 5; i++ {
-		tempN, _ := rand.Int(rand.Reader, big.NewInt(100000000))
-		p := fmt.Sprintf("%08d", tempN.Int64())
-
-		_, lastErr = r.db.Exec(ctx,
-			`UPDATE service_requests SET protocol_number = $1 WHERE id = $2`,
-			p, sr.ID,
-		)
-		if lastErr == nil {
-			finalProtocol = p
-			break
-		}
+	// Generate unique protocol number in a single DB round trip
+	err = r.db.QueryRow(ctx,
+		`UPDATE service_requests
+		 SET protocol_number = LPAD(CAST(FLOOR(RANDOM() * 100000000) AS TEXT), 8, '0')
+		 WHERE id = $1 AND protocol_number IS NULL
+		 RETURNING protocol_number`,
+		sr.ID,
+	).Scan(&sr.ProtocolNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set unique protocol number: %w", err)
 	}
 
-	if finalProtocol == "" {
-		return nil, fmt.Errorf("failed to set unique protocol number after retries: %w", lastErr)
-	}
-
-	sr.ProtocolNumber = &finalProtocol
 	return sr, nil
 }
 
@@ -147,7 +125,7 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 	whereApplied := false
 
 	if search != "" {
-		query += ` WHERE (CAST(sr.id AS TEXT) ILIKE $1 OR sr.service_title ILIKE $1 OR sr.category ILIKE $1 OR u.full_name ILIKE $1)`
+		query += ` WHERE (sr.service_title ILIKE $1 OR sr.category ILIKE $1 OR u.full_name ILIKE $1)`
 		args = append(args, "%"+search+"%")
 		whereApplied = true
 	}
@@ -227,7 +205,7 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 
 	args := []interface{}{userID}
 	if search != "" {
-		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
+		query += ` AND (sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
 
@@ -266,7 +244,7 @@ func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context
 
 	args := []interface{}{teamID}
 	if search != "" {
-		query += ` AND (CAST(sr.id AS TEXT) ILIKE $2 OR sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
+		query += ` AND (sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
 		args = append(args, "%"+search+"%")
 	}
 
@@ -326,25 +304,25 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
-	// Single JOIN query to avoid N+1: fetch sr + team name + region name + user name in one query
 	query := `
-		SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
-		       sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
-		       sr.latitude, sr.longitude, sr.geocoded_address,
-		       sr.team_id, COALESCE(t.name, ''),
-		       sr.region_id, COALESCE(rg.name, ''),
-		       sr.created_at, sr.updated_at
-		FROM service_requests sr
-		LEFT JOIN users u ON sr.user_id = u.id
-		LEFT JOIN teams t ON sr.team_id = t.id
-		LEFT JOIN regions rg ON sr.region_id = rg.id
-		WHERE sr.id = $1 AND sr.status = $2
-		RETURNING sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
-		          sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
-		          sr.latitude, sr.longitude, sr.geocoded_address,
-		          sr.team_id, COALESCE(t.name, ''),
-		          sr.region_id, COALESCE(rg.name, ''),
-		          sr.created_at, sr.updated_at`
+		WITH updated AS (
+			UPDATE service_requests
+			SET status = $2, updated_at = NOW()
+			WHERE id = $1
+			RETURNING id, user_id, service_id, protocol_number, service_title, category,
+			          request_data, attachments, status, latitude, longitude, geocoded_address,
+			          team_id, region_id, created_at, updated_at
+		)
+		SELECT u.id, u.user_id, COALESCE(u2.full_name, ''), u.service_id, u.protocol_number,
+		       u.service_title, u.category, u.request_data, u.attachments, u.status,
+		       u.latitude, u.longitude, u.geocoded_address,
+		       u.team_id, COALESCE(t.name, ''),
+		       u.region_id, COALESCE(rg.name, ''),
+		       u.created_at, u.updated_at
+		FROM updated u
+		LEFT JOIN users u2 ON u.user_id = u2.id
+		LEFT JOIN teams t ON u.team_id = t.id
+		LEFT JOIN regions rg ON u.region_id = rg.id`
 
 	sr := &models.ServiceRequest{}
 	err := r.db.QueryRow(ctx, query, id, status).Scan(
