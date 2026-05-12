@@ -117,6 +117,59 @@ func (h *TeamHandler) DeleteTeam(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "team deleted successfully"})
 }
 
+// GET /my-team — retorna a equipe do usuário autenticado (secretary ou attendant)
+func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	user, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	if user.Type == nil || (*user.Type != "secretary" && *user.Type != "attendant") {
+		respondError(w, http.StatusForbidden, "only secretary and attendant users have a team")
+		return
+	}
+
+	if user.TeamID == nil {
+		respondError(w, http.StatusNotFound, "user has no team assigned")
+		return
+	}
+
+	members, err := h.teamRepo.ListMembers(r.Context(), *user.TeamID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list team members")
+		return
+	}
+
+	var secretary *models.User
+	attendants := []*models.User{}
+
+	for _, m := range members {
+		if m.ID == userID {
+			continue
+		}
+		if m.Type != nil && *m.Type == "secretary" {
+			secretary = m
+		} else {
+			attendants = append(attendants, m)
+		}
+	}
+
+	resp := models.MyTeamResponse{
+		Team:       *user.Team,
+		Secretary:  secretary,
+		Attendants: attendants,
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
 // GET /teams/{id}/members
 func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)

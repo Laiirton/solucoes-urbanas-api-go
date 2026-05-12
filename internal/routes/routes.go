@@ -112,6 +112,9 @@ func Setup(
 			// Home
 			r.Get("/home", homeHandler.Index)
 
+			// My Team — current user's team info
+			r.Get("/my-team", teamHandler.GetMyTeam)
+
 			// Team members (admin or secretary of the team — checked in handler)
 			r.Get("/teams/{id}/members", teamHandler.ListTeamMembers)
 			r.Post("/teams/{id}/members", teamHandler.AddTeamMember)

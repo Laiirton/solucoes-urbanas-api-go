@@ -46,3 +46,9 @@ type TeamMember struct {
 	ProfileImageURL *string   `json:"profile_image_url,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+type MyTeamResponse struct {
+	Team       Team    `json:"team"`
+	Secretary  *User   `json:"secretary"`
+	Attendants []*User `json:"attendants"`
+}
