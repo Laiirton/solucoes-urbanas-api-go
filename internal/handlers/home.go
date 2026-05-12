@@ -42,14 +42,25 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	regionFilter := GetRegionFilterForAdmin(r.Context(), h.userRepo, userID)
 	teamFilter := GetTeamFilterForUser(r.Context(), h.userRepo, userID)
 
-	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, regionFilter, teamFilter)
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+
+	var startDatePtr, endDatePtr *string
+	if startDate != "" {
+		startDatePtr = &startDate
+	}
+	if endDate != "" {
+		endDatePtr = &endDate
+	}
+
+	resp, err := h.srRepo.GetHomeStats(r.Context(), isAdmin, userID, regionFilter, teamFilter, startDatePtr, endDatePtr)
 	if err != nil {
 		http.Error(w, "Error computing home stats", http.StatusInternalServerError)
 		return
 	}
 
 	resp.MapLocations = []models.MapLocation{}
-	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", regionFilter, teamFilter, 1, 1000)
+	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", regionFilter, teamFilter, startDatePtr, endDatePtr, 1, 1000)
 	if err == nil {
 		for _, sr := range list {
 			var lat, lon float64

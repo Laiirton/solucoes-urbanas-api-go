@@ -190,7 +190,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	if teamFilter != nil && userRole != nil && *userRole == "attendant" {
 		list, err = h.srRepo.ListServiceRequestsByTeam(r.Context(), *teamFilter, search, status, page, limit)
 	} else if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, regionFilter, teamFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, regionFilter, teamFilter, nil, nil, page, limit)
 	} else {
 		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, regionFilter, page, limit)
 	}
@@ -259,7 +259,7 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 	var list []*models.ServiceRequest
 	var err error
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", regionFilter, teamFilter, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", regionFilter, teamFilter, nil, nil, page, limit)
 	} else {
 		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, "", regionFilter, page, limit)
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -133,7 +134,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter, teamFilter *int64, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter, teamFilter *int64, startDate, endDate *string, page, limit int) ([]*models.ServiceRequest, error) {
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -181,6 +182,27 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 			query += ` WHERE sr.team_id = $1`
 		}
 		args = append(args, *teamFilter)
+		whereApplied = true
+	}
+
+	if startDate != nil && *startDate != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.created_at >= $%d`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE sr.created_at >= $%d`, len(args)+1)
+		}
+		args = append(args, *startDate)
+		whereApplied = true
+	}
+
+	if endDate != nil && *endDate != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.created_at <= $%d::date + interval '1 day'`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE sr.created_at <= $%d::date + interval '1 day'`, len(args)+1)
+		}
+		args = append(args, *endDate)
+		whereApplied = true
 	}
 
 	query += ` ORDER BY sr.id DESC`
@@ -508,7 +530,7 @@ func (r *ServiceRequestRepository) GetAverageServiceTime(ctx context.Context, se
 	return result, nil
 }
 
-func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter, teamFilter *int64) (*models.HomeResponse, error) {
+func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter, teamFilter *int64, startDate, endDate *string) (*models.HomeResponse, error) {
 	baseWhere := ""
 	var args []interface{}
 
@@ -521,6 +543,23 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	} else if regionFilter != nil {
 		baseWhere = "WHERE sr.region_id = $1"
 		args = append(args, *regionFilter)
+	}
+
+	if startDate != nil && *startDate != "" {
+		if baseWhere != "" {
+			baseWhere += fmt.Sprintf(" AND sr.created_at >= $%d", len(args)+1)
+		} else {
+			baseWhere = fmt.Sprintf("WHERE sr.created_at >= $%d", len(args)+1)
+		}
+		args = append(args, *startDate)
+	}
+	if endDate != nil && *endDate != "" {
+		if baseWhere != "" {
+			baseWhere += fmt.Sprintf(" AND sr.created_at <= $%d::date + interval '1 day'", len(args)+1)
+		} else {
+			baseWhere = fmt.Sprintf("WHERE sr.created_at <= $%d::date + interval '1 day'", len(args)+1)
+		}
+		args = append(args, *endDate)
 	}
 
 	statsQuery := fmt.Sprintf(`
@@ -598,7 +637,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	var topArgs []interface{}
 	topFilter := ""
 	if baseWhere != "" {
-		topFilter = "AND " + baseWhere
+		topFilter = "AND " + strings.TrimPrefix(baseWhere, "WHERE ")
 		topArgs = append(topArgs, args...)
 	}
 	topQuery := fmt.Sprintf(`
@@ -633,7 +672,7 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	var ratedArgs []interface{}
 	ratedFilter := ""
 	if baseWhere != "" {
-		ratedFilter = "AND " + baseWhere
+		ratedFilter = "AND " + strings.TrimPrefix(baseWhere, "WHERE ")
 		ratedArgs = append(ratedArgs, args...)
 	}
 	ratedQuery := fmt.Sprintf(`
