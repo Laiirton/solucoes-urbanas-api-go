@@ -60,44 +60,13 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp.MapLocations = []models.MapLocation{}
-	list, err := h.srRepo.ListServiceRequests(r.Context(), "", "", regionFilter, teamFilter, startDatePtr, endDatePtr, 1, 1000)
+	list, err := h.srRepo.ListMapLocations(r.Context(), regionFilter, teamFilter, startDatePtr, endDatePtr, 1000)
 	if err == nil {
-		for _, sr := range list {
-			var lat, lon float64
-			var geoAddr string
-			found := false
-
-			if sr.Latitude != nil && sr.Longitude != nil {
-				lat = *sr.Latitude
-				lon = *sr.Longitude
-				found = true
-				if sr.GeocodedAddress != nil {
-					geoAddr = *sr.GeocodedAddress
-				}
-			} else {
-				address := extractAddressFromRequestData(sr.RequestData)
-				if address != "" {
-					geoAddr = address
-					go h.asyncGeocodeRequest(sr.ID, address)
-				}
-			}
-
-			if found || geoAddr != "" {
-				icon := ""
-				if sr.ServiceID != nil {
-					icon = models.GetServiceIcon(*sr.ServiceID)
-				}
-
-				resp.MapLocations = append(resp.MapLocations, models.MapLocation{
-					ID:           sr.ID,
-					Address:      geoAddr,
-					Latitude:     lat,
-					Longitude:    lon,
-					ServiceTitle: sr.ServiceTitle,
-					Status:       sr.Status,
-					Icon:         icon,
-					Found:        found,
-				})
+		for _, loc := range list {
+			if loc.Found || loc.Address != "" {
+				resp.MapLocations = append(resp.MapLocations, loc)
+			} else if loc.Address != "" {
+				go h.asyncGeocodeRequest(loc.ID, loc.Address)
 			}
 		}
 	}
