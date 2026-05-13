@@ -240,21 +240,22 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 }
 
 func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool, allowedCategories []string) ([]string, error) {
-	query := `SELECT DISTINCT category FROM services`
-
+	var conditions []string
 	var args []interface{}
+
+	conditions = append(conditions, "c.is_active = TRUE")
+
 	if onlyActive {
-		query += ` WHERE is_active = TRUE`
-		if len(allowedCategories) > 0 {
-			query += fmt.Sprintf(` AND category = ANY($%d)`, len(args)+1)
-			args = append(args, allowedCategories)
-		}
-	} else if len(allowedCategories) > 0 {
-		query += fmt.Sprintf(` WHERE category = ANY($%d)`, len(args)+1)
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM services s WHERE (s.category = c.name OR s.category_id = c.id) AND s.is_active = TRUE)")
+	}
+
+	if len(allowedCategories) > 0 {
+		conditions = append(conditions, fmt.Sprintf("c.name = ANY($%d)", len(args)+1))
 		args = append(args, allowedCategories)
 	}
 
-	query += ` ORDER BY category ASC`
+	query := `SELECT DISTINCT c.name FROM categories c WHERE ` + strings.Join(conditions, " AND ")
+	query += ` ORDER BY c.name ASC`
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
