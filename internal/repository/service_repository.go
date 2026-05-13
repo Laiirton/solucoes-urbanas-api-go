@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -65,43 +66,39 @@ func (r *ServiceRepository) GetServiceByID(ctx context.Context, id int64) (*mode
 }
 
 func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, search string, page, limit int, allowedCategories []string, allowedServices []int64) ([]*models.Service, error) {
-	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
-               FROM services`
+	baseQuery := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
+                  FROM services`
 
+	var conditions []string
 	var args []interface{}
-	whereApplied := false
+
 	if onlyActive {
-		query += ` WHERE is_active = TRUE`
-		whereApplied = true
+		conditions = append(conditions, "is_active = TRUE")
 	}
 
-	if len(allowedCategories) > 0 {
-		if whereApplied {
-			query += fmt.Sprintf(` AND category = ANY($%d)`, len(args)+1)
-		} else {
-			query += fmt.Sprintf(` WHERE category = ANY($%d)`, len(args)+1)
-		}
-		whereApplied = true
+	hasCat := len(allowedCategories) > 0
+	hasSvc := len(allowedServices) > 0
+
+	if hasCat && hasSvc {
+		conditions = append(conditions, fmt.Sprintf("(category = ANY($%d) OR id = ANY($%d))", len(args)+1, len(args)+2))
+		args = append(args, allowedCategories, allowedServices)
+	} else if hasCat {
+		conditions = append(conditions, fmt.Sprintf("category = ANY($%d)", len(args)+1))
 		args = append(args, allowedCategories)
-	}
-
-	if len(allowedServices) > 0 {
-		if whereApplied {
-			query += fmt.Sprintf(` AND id = ANY($%d)`, len(args)+1)
-		} else {
-			query += fmt.Sprintf(` WHERE id = ANY($%d)`, len(args)+1)
-		}
-		whereApplied = true
+	} else if hasSvc {
+		conditions = append(conditions, fmt.Sprintf("id = ANY($%d)", len(args)+1))
 		args = append(args, allowedServices)
 	}
 
 	if search != "" {
-		if whereApplied {
-			query += ` AND (title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
-		} else {
-			query += ` WHERE (title ILIKE $1 OR category ILIKE $1 OR description ILIKE $1)`
-		}
+		paramIdx := len(args) + 1
+		conditions = append(conditions, fmt.Sprintf("(title ILIKE $%[1]d OR category ILIKE $%[1]d OR description ILIKE $%[1]d)", paramIdx))
 		args = append(args, "%"+search+"%")
+	}
+
+	query := baseQuery
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	query += ` ORDER BY id ASC`
@@ -135,7 +132,7 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 }
 
 func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool, allowedServices []int64) ([]*models.Service, error) {
-	query := `SELECT id, title, description, category, form_schema, is_active, created_at, updated_at
+	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
               FROM services WHERE category = $1`
 
 	var args []interface{}
@@ -162,7 +159,7 @@ func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category
 	for rows.Next() {
 		svc := &models.Service{}
 		if err := rows.Scan(
-			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+			&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 			&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan service: %w", err)

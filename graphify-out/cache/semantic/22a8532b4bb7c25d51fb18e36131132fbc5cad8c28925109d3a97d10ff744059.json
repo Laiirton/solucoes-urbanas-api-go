@@ -1,0 +1,1 @@
+{"nodes": [{"contributor": null, "source_file": "internal/database/migrations/000021_add_phone_to_users.up.sql", "source_location": null, "file_type": "code", "captured_at": null, "id": "file:internal/database/migrations/000021_add_phone_to_users.up.sql", "author": null, "source_url": null, "label": "Migration 000021: Add Phone to Users (up)"}], "edges": [], "hyperedges": []}

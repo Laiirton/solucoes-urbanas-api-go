@@ -1,0 +1,1 @@
+{"nodes": [{"contributor": null, "source_file": "internal/database/migrations/000018_create_categories.up.sql", "source_location": null, "file_type": "code", "captured_at": null, "id": "file:internal/database/migrations/000018_create_categories.up.sql", "author": null, "source_url": null, "label": "Migration 000018: Create Categories (up)"}], "edges": [], "hyperedges": []}
