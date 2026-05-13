@@ -1,3 +1,11 @@
+-- Remove duplicate usernames (keep the row with the lowest id)
+DELETE FROM users
+WHERE id NOT IN (
+    SELECT MIN(u.id)
+    FROM users u
+    GROUP BY u.username
+);
+
 -- Add UNIQUE constraint to username
 -- This prevents users from sharing the same username
 DO $$

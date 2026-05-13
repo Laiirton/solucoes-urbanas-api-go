@@ -64,7 +64,13 @@ func RunMigrations(databaseURL string) error {
 	defer m.Close()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run migrations: %w", err)
+		// If we hit a dirty version, force it back so migrations can re-run
+		if fixErr := m.Force(22); fixErr != nil {
+			return fmt.Errorf("failed to run migrations: %w (force fix also failed: %v)", err, fixErr)
+		}
+		if retryErr := m.Up(); retryErr != nil && retryErr != migrate.ErrNoChange {
+			return fmt.Errorf("failed to run migrations (after force fix): %w", retryErr)
+		}
 	}
 
 	log.Println("Database migrations applied successfully")
