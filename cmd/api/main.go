@@ -30,15 +30,15 @@ func main() {
 		log.Println("Warning: SUPABASE_URL or SUPABASE_KEY not provided. File uploads may fail.")
 	}
 
+	if err := database.RunMigrations(cfg.DatabaseURL); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
 	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
-
-	if err := db.RunMigrations(cfg.DatabaseURL); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
 
 	userRepo := repository.NewUserRepository(db.Pool)
 	serviceRepo := repository.NewServiceRepository(db.Pool)

@@ -85,7 +85,7 @@ func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.R
 
 	onlyActive := r.URL.Query().Get("all") != "true"
 
-	services, err := h.serviceRepo.ListServicesByCategory(r.Context(), category, onlyActive, h.getAllowedServices(r))
+	services, err := h.serviceRepo.ListServicesByCategory(r.Context(), category, onlyActive, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list services by category")
 		return
@@ -103,7 +103,7 @@ func (h *ServiceHandler) ListServicesByCategoryID(w http.ResponseWriter, r *http
 
 	onlyActive := r.URL.Query().Get("all") != "true"
 
-	services, err := h.serviceRepo.ListServicesByCategoryID(r.Context(), id, onlyActive, h.getAllowedServices(r))
+	services, err := h.serviceRepo.ListServicesByCategoryID(r.Context(), id, onlyActive, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list services by category id")
 		return

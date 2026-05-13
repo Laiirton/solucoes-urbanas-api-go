@@ -51,7 +51,7 @@ func Connect(databaseURL string) (*DB, error) {
 	return &DB{Pool: pool}, nil
 }
 
-func (db *DB) RunMigrations(databaseURL string) error {
+func RunMigrations(databaseURL string) error {
 	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("failed to create migration source: %w", err)
@@ -69,6 +69,10 @@ func (db *DB) RunMigrations(databaseURL string) error {
 
 	log.Println("Database migrations applied successfully")
 	return nil
+}
+
+func (db *DB) RunMigrations(databaseURL string) error {
+	return RunMigrations(databaseURL)
 }
 
 func (db *DB) Close() {
