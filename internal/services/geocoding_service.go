@@ -1,7 +1,6 @@
 package services
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -33,9 +32,7 @@ type GeocodingService struct {
 }
 
 func NewGeocodingService() *GeocodingService {
-	// Configure HTTP transport with connection pooling and timeouts
 	tr := &http.Transport{
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   10,
 		IdleConnTimeout:       90 * time.Second,
@@ -46,10 +43,23 @@ func NewGeocodingService() *GeocodingService {
 	return &GeocodingService{
 		client: &http.Client{
 			Transport: tr,
-			Timeout:   10 * time.Second, // Timeout for entire request
+			Timeout:   10 * time.Second,
 		},
 		nominatimURL: "https://nominatim.openstreetmap.org/search",
 	}
+}
+
+// geocodeFloatValue extracts a float64 from map[string]interface{}, trying both string and float64 types
+func geocodeFloatValue(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key].(string); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	if v, ok := m[key].(float64); ok {
+		return v
+	}
+	return 0
 }
 
 // GeocodeAddress busca coordenadas geográficas baseadas no endereço.
@@ -121,12 +131,9 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	}
 
 	first := body[0]
-	latStr, _ := first["lat"].(string)
-	lonStr, _ := first["lon"].(string)
+	lat := geocodeFloatValue(first, "lat")
+	lon := geocodeFloatValue(first, "lon")
 	displayName, _ := first["display_name"].(string)
-
-	lat, _ := strconv.ParseFloat(latStr, 64)
-	lon, _ := strconv.ParseFloat(lonStr, 64)
 
 	if lat == 0 && lon == 0 {
 		return &GeocodingResult{
@@ -136,7 +143,6 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 		}, nil
 	}
 
-	// Extract bairro from address details
 	bairro := extractBairroFromNominatim(first)
 
 	return &GeocodingResult{
@@ -150,9 +156,6 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 
 // extractBairroFromNominatim tenta extrair o nome do bairro do objeto de
 // detalhes de endereço retornado pelo Nominatim (addressdetails=1).
-// A ordem de precedência reflete a hierarquia do OpenStreetMap no Brasil:
-//
-//	suburb > neighbourhood > city_district > village > town > municipality
 func extractBairroFromNominatim(result map[string]interface{}) string {
 	rawAddress, ok := result["address"]
 	if !ok {

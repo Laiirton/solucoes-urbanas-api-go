@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -146,12 +147,30 @@ func (h *ServiceHandler) GetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch metrics
-	stats, _ := h.srRepo.GetServiceStatusStats(r.Context(), id)
-	avgTime, _ := h.srRepo.GetAverageServiceTime(r.Context(), id)
-	recent, _ := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
-	ratingStats, _ := h.ratingRepo.GetStatsByServiceID(r.Context(), id)
-	recentRatings, _ := h.ratingRepo.ListByServiceID(r.Context(), id, 3, 0)
+	// Fetch metrics (log errors but don't fail the whole request)
+	stats, err := h.srRepo.GetServiceStatusStats(r.Context(), id)
+	if err != nil {
+		log.Printf("Warning: failed to fetch status stats for service %d: %v", id, err)
+		stats = []models.StatusStat{}
+	}
+	avgTime, err := h.srRepo.GetAverageServiceTime(r.Context(), id)
+	if err != nil {
+		log.Printf("Warning: failed to fetch avg service time for service %d: %v", id, err)
+	}
+	recent, err := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
+	if err != nil {
+		log.Printf("Warning: failed to fetch recent requests for service %d: %v", id, err)
+		recent = []*models.ServiceRequestDetailResponse{}
+	}
+	ratingStats, err := h.ratingRepo.GetStatsByServiceID(r.Context(), id)
+	if err != nil {
+		log.Printf("Warning: failed to fetch rating stats for service %d: %v", id, err)
+	}
+	recentRatings, err := h.ratingRepo.ListByServiceID(r.Context(), id, 3, 0)
+	if err != nil {
+		log.Printf("Warning: failed to fetch recent ratings for service %d: %v", id, err)
+		recentRatings = []*models.ServiceRatingResponse{}
+	}
 
 	resp := models.ServiceDetailResponse{
 		Service:            svc,

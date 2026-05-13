@@ -17,10 +17,17 @@ func NewServiceRequestRepository(db *pgxpool.Pool) *ServiceRequestRepository {
 }
 
 func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, userID *int64, req *models.CreateServiceRequestRequest, regionID, teamID *int64, latitude, longitude *float64, geocodedAddress *string) (*models.ServiceRequest, error) {
-	// Fetch category from the referenced service
+	// Use a transaction to atomically verify service exists+active and insert request
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock the service row to prevent concurrent modifications
 	var serviceCategory string
-	err := r.db.QueryRow(ctx,
-		`SELECT category FROM services WHERE id = $1 AND is_active = TRUE`,
+	err = tx.QueryRow(ctx,
+		`SELECT category FROM services WHERE id = $1 AND is_active = TRUE FOR UPDATE`,
 		req.ServiceID,
 	).Scan(&serviceCategory)
 	if err != nil {
@@ -40,8 +47,8 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		          (SELECT COALESCE(name, '') FROM regions WHERE id = $8),
 		          created_at, updated_at`
 
-	sr := &models.ServiceRequest{}
-	err = r.db.QueryRow(ctx, insertQuery,
+sr := &models.ServiceRequest{}
+	err = tx.QueryRow(ctx, insertQuery,
 		userID, req.ServiceID, req.ServiceTitle, serviceCategory,
 		req.RequestData, req.Attachments, teamID, regionID,
 		latitude, longitude, geocodedAddress,
@@ -57,23 +64,44 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		return nil, fmt.Errorf("failed to create service request: %w", err)
 	}
 
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	if req.ServiceID != nil {
 		sr.Icon = models.GetServiceIcon(*req.ServiceID)
 	}
 
-	// Generate unique protocol number in a single DB round trip
-	err = r.db.QueryRow(ctx,
-		`UPDATE service_requests
-		 SET protocol_number = LPAD(CAST(FLOOR(RANDOM() * 100000000) AS TEXT), 8, '0')
-		 WHERE id = $1 AND protocol_number IS NULL
-		 RETURNING protocol_number`,
-		sr.ID,
-	).Scan(&sr.ProtocolNumber)
+	// Generate unique protocol number with retry on collision
+	protocolNumber, err := r.generateProtocolNumber(ctx, sr.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set unique protocol number: %w", err)
 	}
+	sr.ProtocolNumber = &protocolNumber
 
 	return sr, nil
+}
+
+func (r *ServiceRequestRepository) generateProtocolNumber(ctx context.Context, requestID int64) (string, error) {
+	var protocolNumber string
+	var err error
+
+	// Retry up to 5 times in case of collision
+	for i := 0; i < 5; i++ {
+		err = r.db.QueryRow(ctx,
+			`UPDATE service_requests
+			 SET protocol_number = LPAD(CAST(FLOOR(RANDOM() * 100000000) AS TEXT), 8, '0')
+			 WHERE id = $1 AND protocol_number IS NULL
+			 RETURNING protocol_number`,
+			requestID,
+		).Scan(&protocolNumber)
+		if err == nil {
+			return protocolNumber, nil
+		}
+		// If UNIQUE violation, retry; otherwise return error
+	}
+	return "", fmt.Errorf("failed to generate unique protocol number after 5 attempts")
 }
 
 func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id int64) (*models.ServiceRequest, error) {

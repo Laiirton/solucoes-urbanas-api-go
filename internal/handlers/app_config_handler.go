@@ -119,7 +119,7 @@ func (h *AppConfigHandler) UpdateSetting(w http.ResponseWriter, r *http.Request)
 	key := chi.URLParam(r, "key")
 	var value interface{}
 	if err := json.NewDecoder(r.Body).Decode(&value); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -135,7 +135,7 @@ func (h *AppConfigHandler) UpdateSetting(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.repo.UpdateSetting(r.Context(), key, value); err != nil {
-		http.Error(w, "Error updating setting", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "error updating setting")
 		return
 	}
 
@@ -145,12 +145,12 @@ func (h *AppConfigHandler) UpdateSetting(w http.ResponseWriter, r *http.Request)
 func (h *AppConfigHandler) CreateBanner(w http.ResponseWriter, r *http.Request) {
 	var banner models.AppBanner
 	if err := json.NewDecoder(r.Body).Decode(&banner); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := h.repo.CreateBanner(r.Context(), &banner); err != nil {
-		http.Error(w, "Error creating banner", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "error creating banner")
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *AppConfigHandler) UpdateBanner(w http.ResponseWriter, r *http.Request) 
 
 	var banner models.AppBanner
 	if err := json.NewDecoder(r.Body).Decode(&banner); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	banner.ID = id
@@ -178,7 +178,7 @@ func (h *AppConfigHandler) UpdateBanner(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.repo.UpdateBanner(r.Context(), &banner); err != nil {
-		http.Error(w, "Error updating banner", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "error updating banner")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (h *AppConfigHandler) DeleteBanner(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.repo.DeleteBanner(r.Context(), id); err != nil {
-		http.Error(w, "Error deleting banner", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "error deleting banner")
 		return
 	}
 
@@ -205,7 +205,7 @@ func (h *AppConfigHandler) DeleteBanner(w http.ResponseWriter, r *http.Request) 
 func (h *AppConfigHandler) ListBanners(w http.ResponseWriter, r *http.Request) {
 	banners, err := h.repo.GetBanners(r.Context())
 	if err != nil {
-		http.Error(w, "Error fetching banners", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "error fetching banners")
 		return
 	}
 
@@ -215,13 +215,13 @@ func (h *AppConfigHandler) ListBanners(w http.ResponseWriter, r *http.Request) {
 
 func (h *AppConfigHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Unable to parse form", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "unable to parse form")
 		return
 	}
 
 	file, fileHeader, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Image is required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "image is required")
 		return
 	}
 	defer file.Close()
@@ -230,13 +230,13 @@ func (h *AppConfigHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	filename := "app_config/" + uuid.New().String() + ext
 
 	if h.storage == nil {
-		http.Error(w, "Storage service not configured", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "storage service not configured")
 		return
 	}
 
 	imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
 	if uploadErr != nil {
-		http.Error(w, "Failed to upload image", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "failed to upload image")
 		return
 	}
 

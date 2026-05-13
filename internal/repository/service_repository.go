@@ -220,17 +220,18 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 			title       = COALESCE($1, title),
 			description = COALESCE($2, description),
 			category    = COALESCE($3, category),
-			form_schema = COALESCE($4, form_schema),
-			is_active   = COALESCE($5, is_active),
+			category_id = COALESCE($4, category_id),
+			form_schema = COALESCE($5, form_schema),
+			is_active   = COALESCE($6, is_active),
 			updated_at  = NOW()
-		WHERE id = $6
-		RETURNING id, title, description, category, form_schema, is_active, created_at, updated_at`
+		WHERE id = $7
+		RETURNING id, title, description, category, category_id, form_schema, is_active, created_at, updated_at`
 
 	svc := &models.Service{}
 	err := r.db.QueryRow(ctx, query,
-		req.Title, req.Description, req.Category, req.FormSchema, req.IsActive, id,
+		req.Title, req.Description, req.Category, req.CategoryID, req.FormSchema, req.IsActive, id,
 	).Scan(
-		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.FormSchema,
+		&svc.ID, &svc.Title, &svc.Description, &svc.Category, &svc.CategoryID, &svc.FormSchema,
 		&svc.IsActive, &svc.CreatedAt, &svc.UpdatedAt,
 	)
 	if err != nil {
@@ -278,20 +279,17 @@ func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool,
 }
 
 func (r *ServiceRepository) DeleteService(ctx context.Context, id int64) error {
-	tx, err := r.db.Begin(ctx)
+	// Check if there are associated service_requests — prevent orphaning
+	var reqCount int64
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM service_requests WHERE service_id = $1`, id).Scan(&reqCount)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("failed to check service requests: %w", err)
 	}
-	defer tx.Rollback(ctx)
-
-	// Update service_requests to set service_id to NULL so we can delete the service
-	_, err = tx.Exec(ctx, `UPDATE service_requests SET service_id = NULL WHERE service_id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("failed to clear service requests references: %w", err)
+	if reqCount > 0 {
+		return fmt.Errorf("cannot delete service with %d associated request(s) — reassign or delete requests first", reqCount)
 	}
 
-	// Now delete the service
-	result, err := tx.Exec(ctx, `DELETE FROM services WHERE id = $1`, id)
+	result, err := r.db.Exec(ctx, `DELETE FROM services WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete service: %w", err)
 	}
@@ -299,5 +297,5 @@ func (r *ServiceRepository) DeleteService(ctx context.Context, id int64) error {
 		return fmt.Errorf("service not found")
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }

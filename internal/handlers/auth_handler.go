@@ -35,12 +35,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userRepo.GetUserByUsernameOrEmail(r.Context(), req.Username)
 	if err != nil {
-		respondError(w, http.StatusUnauthorized, "user not found")
+		respondError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		respondError(w, http.StatusUnauthorized, "incorrect password")
+		respondError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
@@ -62,8 +62,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) generateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(),
-		"iat":     time.Now().Unix(),
+		"exp":     time.Now().UTC().Add(30 * 24 * time.Hour).Unix(),
+		"iat":     time.Now().UTC().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.jwtSecret))

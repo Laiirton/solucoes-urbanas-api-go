@@ -51,13 +51,13 @@ func generateSlug(title string) string {
 
 func (h *NewsHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Unable to parse form", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "unable to parse form")
 		return
 	}
 
 	file, fileHeader, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Image is required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "image is required")
 		return
 	}
 	defer file.Close()
@@ -76,13 +76,13 @@ func (h *NewsHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	filename := "news_content/" + userIdStr + "/" + uuid.New().String() + ext
 
 	if h.storage == nil {
-		http.Error(w, "Storage service not configured", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "storage service not configured")
 		return
 	}
 
 	imageURL, uploadErr := h.storage.UploadFile(file, filename, fileHeader.Header.Get("Content-Type"))
 	if uploadErr != nil {
-		http.Error(w, "Failed to upload image", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "failed to upload image")
 		return
 	}
 
@@ -93,12 +93,12 @@ func (h *NewsHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 	var n models.News
 	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if n.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if n.Status == "published" && n.PublishedAt == nil {
-		now := time.Now()
+		now := time.Now().UTC()
 		n.PublishedAt = &now
 	}
 
@@ -128,7 +128,7 @@ func (h *NewsHandler) CreateNews(w http.ResponseWriter, r *http.Request) {
 
 	news, err := h.repo.CreateNews(r.Context(), &n)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create news: %v", err), http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create news: %v", err))
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *NewsHandler) GetNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, "News not found", http.StatusNotFound)
+		respondError(w, http.StatusNotFound, "news not found")
 		return
 	}
 
@@ -184,36 +184,36 @@ func (h *NewsHandler) UpdateNews(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid news id")
 		return
 	}
 
 	existing, err := h.repo.GetNews(r.Context(), id)
 	if err != nil {
-		http.Error(w, "News not found", http.StatusNotFound)
+		respondError(w, http.StatusNotFound, "news not found")
 		return
 	}
 
 	var n models.UpdateNewsRequest
 	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if !hasNewsUpdateFields(&n) {
-		http.Error(w, "At least one field is required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "at least one field is required")
 		return
 	}
 
 	shouldNotify := n.Status != nil && *n.Status == "published" && existing.Status != "published"
 	if shouldNotify && n.PublishedAt == nil {
-		now := time.Now()
+		now := time.Now().UTC()
 		n.PublishedAt = &now
 	}
 
 	news, err := h.repo.UpdateNews(r.Context(), id, &n)
 	if err != nil {
-		http.Error(w, "Failed to update news", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "failed to update news")
 		return
 	}
 
@@ -250,18 +250,18 @@ func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "invalid news id")
 		return
 	}
 
 	n, err := h.repo.GetNews(r.Context(), id)
 	if err != nil {
-		http.Error(w, "News not found", http.StatusNotFound)
+		respondError(w, http.StatusNotFound, "news not found")
 		return
 	}
 
 	if err := h.repo.DeleteNews(r.Context(), id); err != nil {
-		http.Error(w, "Failed to delete news", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "failed to delete news")
 		return
 	}
 

@@ -13,6 +13,19 @@ func NewGeolocationHandler() *GeolocationHandler {
 	return &GeolocationHandler{}
 }
 
+// parseFloatField extracts a float64 from map[string]interface{} by trying string and float64 types
+func parseFloatField(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key].(string); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	if v, ok := m[key].(float64); ok {
+		return v
+	}
+	return 0
+}
+
 func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 	street := r.URL.Query().Get("street")
 	if len(street) < 2 {
@@ -40,7 +53,7 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Header.Set("User-Agent", "Laravel-Geolocation/1.0")
+	req.Header.Set("User-Agent", "SolucoesUrbanas-Geolocation/1.0")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -61,11 +74,8 @@ func (h *GeolocationHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	first := body[0]
-	latStr, _ := first["lat"].(string)
-	lonStr, _ := first["lon"].(string)
-
-	lat, _ := strconv.ParseFloat(latStr, 64)
-	lon, _ := strconv.ParseFloat(lonStr, 64)
+	lat := parseFloatField(first, "lat")
+	lon := parseFloatField(first, "lon")
 
 	response := map[string]interface{}{
 		"query":        street,

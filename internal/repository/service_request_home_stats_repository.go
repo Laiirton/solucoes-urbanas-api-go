@@ -25,8 +25,9 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	stats.InProgressRequests = models.StatDetail{Total: statusCounts["in_progress"], Percent: pct(statusCounts["in_progress"], total)}
 	stats.CompletedRequests = models.StatDetail{Total: statusCounts["completed"], Percent: pct(statusCounts["completed"], total)}
 	stats.CancelledRequests = models.StatDetail{Total: statusCounts["cancelled"], Percent: pct(statusCounts["cancelled"], total)}
-	stats.UrgentRequests = models.StatDetail{Total: statusCounts["urgent"], Percent: pct(statusCounts["urgent"], total)}
-	unresolved := statusCounts["pending"] + statusCounts["in_progress"] + statusCounts["urgent"]
+	// Note: "urgent" is not a valid status in the DB enum. Kept for model compatibility.
+	stats.UrgentRequests = models.StatDetail{Total: 0, Percent: 0}
+	unresolved := statusCounts["pending"] + statusCounts["in_progress"]
 	stats.UnresolvedRequests = models.StatDetail{Total: unresolved, Percent: pct(unresolved, total)}
 
 	popularServices := r.computePopularServices(ctx, baseWhere, args)
@@ -453,7 +454,7 @@ func (r *ServiceRequestRepository) computeVolume7d(ctx context.Context, baseWher
 }
 
 func (r *ServiceRequestRepository) ListMapLocations(ctx context.Context, regionFilter, teamFilter *int64, startDate, endDate *string, limit int) ([]models.MapLocation, error) {
-	query := `SELECT sr.id, sr.latitude, sr.longitude, sr.geocoded_address, sr.service_title, sr.status, COALESCE(s.icon, '')
+	query := `SELECT sr.id, sr.latitude, sr.longitude, sr.geocoded_address, sr.service_title, sr.status, COALESCE(sr.service_id, 0)
 	          FROM service_requests sr
 	          LEFT JOIN services s ON sr.service_id = s.id`
 
@@ -512,9 +513,12 @@ func (r *ServiceRequestRepository) ListMapLocations(ctx context.Context, regionF
 		var loc models.MapLocation
 		var lat, lon *float64
 		var geoAddr *string
-		if err := rows.Scan(&loc.ID, &lat, &lon, &geoAddr, &loc.ServiceTitle, &loc.Status, &loc.Icon); err != nil {
+		var serviceID int64
+		if err := rows.Scan(&loc.ID, &lat, &lon, &geoAddr, &loc.ServiceTitle, &loc.Status, &serviceID); err != nil {
 			continue
 		}
+		// Map service_id to icon using the predefined mapping
+		loc.Icon = models.GetServiceIcon(serviceID)
 		if lat != nil && lon != nil {
 			loc.Latitude = *lat
 			loc.Longitude = *lon

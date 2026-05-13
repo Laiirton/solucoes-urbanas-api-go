@@ -33,7 +33,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 
 	var list []*models.ServiceRequest
 
-	if teamFilter != nil && userRole != nil && *userRole == "attendant" {
+	if teamFilter != nil && userRole != nil && (*userRole == "attendant" || *userRole == "secretary") {
 		list, err = h.srRepo.ListServiceRequestsByTeam(r.Context(), *teamFilter, search, status, page, limit)
 	} else if r.URL.Query().Get("all") == "true" {
 		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, regionFilter, teamFilter, nil, nil, page, limit)

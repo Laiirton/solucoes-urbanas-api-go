@@ -63,7 +63,7 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 	list, err := h.srRepo.ListMapLocations(r.Context(), regionFilter, teamFilter, startDatePtr, endDatePtr, 1000)
 	if err == nil {
 		for _, loc := range list {
-			if loc.Found || loc.Address != "" {
+			if loc.Found {
 				resp.MapLocations = append(resp.MapLocations, loc)
 			} else if loc.Address != "" {
 				go h.asyncGeocodeRequest(loc.ID, loc.Address)
