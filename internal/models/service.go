@@ -47,6 +47,7 @@ type CategoryGroupResponse struct {
 	Name     string               `json:"name"`
 	Icon     string               `json:"icon"`
 	Link     string               `json:"link"`
+	IsActive bool                 `json:"is_active"`
 	Services []ServiceItemResponse `json:"services"`
 }
 

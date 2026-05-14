@@ -66,6 +66,7 @@ func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 			Name:     cat.Name,
 			Icon:     models.GetCategoryIcon(cat.Name),
 			Link:     "services/" + models.Slugify(cat.Name),
+			IsActive: cat.IsActive,
 			Services: serviceItems,
 		})
 	}
