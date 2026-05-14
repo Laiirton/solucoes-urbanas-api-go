@@ -24,29 +24,7 @@ func NewServiceHandler(serviceRepo *repository.ServiceRepository, categoryRepo *
 	return &ServiceHandler{serviceRepo: serviceRepo, categoryRepo: categoryRepo, srRepo: srRepo, ratingRepo: ratingRepo, appConfigRepo: appConfigRepo}
 }
 
-func (h *ServiceHandler) getAllowedCategories(r *http.Request) []string {
-	if h.appConfigRepo == nil {
-		return nil
-	}
-	showAll := r.URL.Query().Get("all") == "true"
-	if showAll {
-		return nil
-	}
-	categories, _ := h.appConfigRepo.GetMobileCategories(r.Context())
-	return categories
-}
 
-func (h *ServiceHandler) getAllowedServices(r *http.Request) []int64 {
-	if h.appConfigRepo == nil {
-		return nil
-	}
-	showAll := r.URL.Query().Get("all") == "true"
-	if showAll {
-		return nil
-	}
-	services, _ := h.appConfigRepo.GetMobileServices(r.Context())
-	return services
-}
 
 // GET /services
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
@@ -58,11 +36,9 @@ func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowedServices := h.getAllowedServices(r)
-
 	var response []models.CategoryGroupResponse
 	for i, cat := range categories {
-		services, err := h.serviceRepo.ListServicesByCategory(r.Context(), cat.Name, onlyActive, allowedServices)
+		services, err := h.serviceRepo.ListServicesByCategory(r.Context(), cat.Name, onlyActive, nil)
 		if err != nil {
 			log.Printf("Warning: failed to list services for category %s: %v", cat.Name, err)
 			continue
@@ -108,20 +84,7 @@ func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	allowed := h.getAllowedCategories(r)
-	if len(allowed) > 0 {
-		found := false
-		for _, c := range allowed {
-			if c == category {
-				found = true
-				break
-			}
-		}
-		if !found {
-			respondError(w, http.StatusNotFound, "category not available")
-			return
-		}
-	}
+
 
 	onlyActive := r.URL.Query().Get("all") != "true"
 
@@ -155,7 +118,7 @@ func (h *ServiceHandler) ListServicesByCategoryID(w http.ResponseWriter, r *http
 func (h *ServiceHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
 
-	categories, err := h.serviceRepo.ListCategories(r.Context(), onlyActive, h.getAllowedCategories(r))
+	categories, err := h.serviceRepo.ListCategories(r.Context(), onlyActive, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list categories")
 		return
