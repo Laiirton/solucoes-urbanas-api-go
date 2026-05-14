@@ -47,7 +47,7 @@ func Setup(
 
 	authHandler := handlers.NewAuthHandler(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userRepo, srRepo, storageService)
-	serviceHandler := handlers.NewServiceHandler(serviceRepo, srRepo, ratingRepo, appConfigRepo)
+	serviceHandler := handlers.NewServiceHandler(serviceRepo, categoryRepo, srRepo, ratingRepo, appConfigRepo)
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
 	pushService := services.NewExpoPushService()

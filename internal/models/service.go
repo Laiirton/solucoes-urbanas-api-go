@@ -40,6 +40,23 @@ type CreateServiceRequest struct {
 	IsActive    *bool           `json:"is_active,omitempty"`
 }
 
+type CategoryGroupResponse struct {
+	ID       int64                `json:"id"`
+	Order    int                  `json:"order"`
+	Category string               `json:"category"`
+	Name     string               `json:"name"`
+	Icon     string               `json:"icon"`
+	Link     string               `json:"link"`
+	Services []ServiceItemResponse `json:"services"`
+}
+
+type ServiceItemResponse struct {
+	IDService int64           `json:"id_service"`
+	Title     string          `json:"title"`
+	NewLink   string          `json:"newLink"`
+	Form      json.RawMessage `json:"form"`
+}
+
 type UpdateServiceRequest struct {
 	Title       *string         `json:"title,omitempty"`
 	Description *string         `json:"description,omitempty"`

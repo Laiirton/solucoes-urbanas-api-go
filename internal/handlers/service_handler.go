@@ -14,13 +14,14 @@ import (
 
 type ServiceHandler struct {
 	serviceRepo   *repository.ServiceRepository
+	categoryRepo  *repository.CategoryRepository
 	srRepo        *repository.ServiceRequestRepository
 	ratingRepo    *repository.ServiceRatingRepository
 	appConfigRepo *repository.AppConfigRepository
 }
 
-func NewServiceHandler(serviceRepo *repository.ServiceRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository, appConfigRepo *repository.AppConfigRepository) *ServiceHandler {
-	return &ServiceHandler{serviceRepo: serviceRepo, srRepo: srRepo, ratingRepo: ratingRepo, appConfigRepo: appConfigRepo}
+func NewServiceHandler(serviceRepo *repository.ServiceRepository, categoryRepo *repository.CategoryRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository, appConfigRepo *repository.AppConfigRepository) *ServiceHandler {
+	return &ServiceHandler{serviceRepo: serviceRepo, categoryRepo: categoryRepo, srRepo: srRepo, ratingRepo: ratingRepo, appConfigRepo: appConfigRepo}
 }
 
 func (h *ServiceHandler) getAllowedCategories(r *http.Request) []string {
@@ -50,15 +51,53 @@ func (h *ServiceHandler) getAllowedServices(r *http.Request) []int64 {
 // GET /services
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
-	search := r.URL.Query().Get("search")
-	page, limit := parsePagination(r)
 
-	services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, search, page, limit, h.getAllowedCategories(r), h.getAllowedServices(r))
+	categories, err := h.categoryRepo.List(r.Context(), onlyActive)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to list services")
+		respondError(w, http.StatusInternalServerError, "failed to list categories")
 		return
 	}
-	respondJSON(w, http.StatusOK, services)
+
+	allowedServices := h.getAllowedServices(r)
+
+	var response []models.CategoryGroupResponse
+	for i, cat := range categories {
+		services, err := h.serviceRepo.ListServicesByCategory(r.Context(), cat.Name, onlyActive, allowedServices)
+		if err != nil {
+			log.Printf("Warning: failed to list services for category %s: %v", cat.Name, err)
+			continue
+		}
+
+		if len(services) == 0 {
+			continue
+		}
+
+		serviceItems := make([]models.ServiceItemResponse, 0, len(services))
+		for _, svc := range services {
+			serviceItems = append(serviceItems, models.ServiceItemResponse{
+				IDService: svc.ID,
+				Title:     svc.Title,
+				NewLink:   "/" + models.Slugify(cat.Name) + "/" + models.Slugify(svc.Title),
+				Form:      svc.FormSchema,
+			})
+		}
+
+		response = append(response, models.CategoryGroupResponse{
+			ID:       cat.ID,
+			Order:    i + 1,
+			Category: cat.Name,
+			Name:     cat.Name,
+			Icon:     models.GetCategoryIcon(cat.Name),
+			Link:     "services/" + models.Slugify(cat.Name),
+			Services: serviceItems,
+		})
+	}
+
+	if response == nil {
+		response = []models.CategoryGroupResponse{}
+	}
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 // GET /services/category/{category}
