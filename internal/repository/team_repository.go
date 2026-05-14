@@ -193,6 +193,38 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, userID int64) er
 		return fmt.Errorf("team not found")
 	}
 
+	// 1. Get the user's type
+	var userType *string
+	err = r.db.QueryRow(ctx, `SELECT type FROM users WHERE id = $1`, userID).Scan(&userType)
+	if err != nil {
+		return fmt.Errorf("failed to get user type: %w", err)
+	}
+
+	// 2. If user is an attendant, get the secretary's work areas
+	if userType != nil && *userType == "attendant" {
+		var workAreaJSON []byte
+		err = r.db.QueryRow(ctx, `
+			SELECT work_area FROM users 
+			WHERE team_id = $1 AND type = 'secretary' 
+			LIMIT 1`, teamID).Scan(&workAreaJSON)
+		
+		if err == nil && workAreaJSON != nil {
+			// Update the user's team_id and work_area
+			result, err := r.db.Exec(ctx,
+				`UPDATE users SET team_id = $1, work_area = $2, updated_at = NOW() WHERE id = $3`,
+				teamID, workAreaJSON, userID,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to add member and update work area: %w", err)
+			}
+			if result.RowsAffected() == 0 {
+				return fmt.Errorf("user not found")
+			}
+			return nil
+		}
+	}
+
+	// Fallback to just updating team_id if not attendant or no secretary found
 	result, err := r.db.Exec(ctx,
 		`UPDATE users SET team_id = $1, updated_at = NOW() WHERE id = $2`,
 		teamID, userID,

@@ -85,6 +85,14 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusForbidden, "secretaries can only create attendants")
 			return
 		}
+
+		// Auto-assign team and work area from secretary
+		if currentUser.TeamID == nil {
+			respondError(w, http.StatusBadRequest, "secretary does not have a team assigned")
+			return
+		}
+		req.TeamID = currentUser.TeamID
+		req.WorkArea = currentUser.WorkArea
 	default:
 		respondError(w, http.StatusForbidden, "forbidden")
 		return

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -258,6 +259,18 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 }
 
 func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context, teamID int64, search, status string, page, limit int) ([]*models.ServiceRequest, error) {
+	// 1. Get secretary's work areas to filter by category
+	var workAreaJSON []byte
+	err := r.db.QueryRow(ctx, `
+		SELECT work_area FROM users 
+		WHERE team_id = $1 AND type = 'secretary' 
+		LIMIT 1`, teamID).Scan(&workAreaJSON)
+
+	var workAreas []string
+	if err == nil && workAreaJSON != nil {
+		json.Unmarshal(workAreaJSON, &workAreas)
+	}
+
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -271,8 +284,14 @@ func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context
 	          WHERE sr.team_id = $1`
 
 	args := []interface{}{teamID}
+
+	if len(workAreas) > 0 {
+		query += fmt.Sprintf(` AND sr.category = ANY($%d)`, len(args)+1)
+		args = append(args, workAreas)
+	}
+
 	if search != "" {
-		query += ` AND (sr.service_title ILIKE $2 OR sr.category ILIKE $2)`
+		query += fmt.Sprintf(` AND (sr.service_title ILIKE $%d OR sr.category ILIKE $%d)`, len(args)+1, len(args)+1)
 		args = append(args, "%"+search+"%")
 	}
 
