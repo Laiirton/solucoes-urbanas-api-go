@@ -31,11 +31,11 @@ type CategorySummary struct {
 }
 
 type MobileHomeResponse struct {
-	LogoURL          string      `json:"logo_url"`
-	Banners          []AppBanner `json:"banners"`
-	Sections         []Section   `json:"sections"`
-	MobileCategories []string    `json:"mobile_categories"`
-	MobileServices   []int64     `json:"mobile_services"`
+	LogoURL    string            `json:"logo_url"`
+	Banners    []AppBanner       `json:"banners"`
+	Sections   []Section         `json:"sections"`
+	Categories []CategorySummary `json:"categories"`
+	Services   []ServiceSummary  `json:"services"`
 }
 
 type Section struct {
