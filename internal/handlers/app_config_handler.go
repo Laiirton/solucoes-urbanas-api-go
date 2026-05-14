@@ -33,7 +33,7 @@ func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	// 2. Get Banners
-	banners, err := h.repo.GetBanners(ctx)
+	banners, err := h.repo.GetBanners(ctx, true)
 	if err != nil {
 		banners = []models.AppBanner{}
 	}
@@ -162,7 +162,7 @@ func (h *AppConfigHandler) DeleteBanner(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *AppConfigHandler) ListBanners(w http.ResponseWriter, r *http.Request) {
-	banners, err := h.repo.GetBanners(r.Context())
+	banners, err := h.repo.GetBanners(r.Context(), false)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "error fetching banners")
 		return

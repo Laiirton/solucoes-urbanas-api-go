@@ -16,9 +16,13 @@ func NewAppConfigRepository(db *pgxpool.Pool) *AppConfigRepository {
 	return &AppConfigRepository{db: db}
 }
 
-func (r *AppConfigRepository) GetBanners(ctx context.Context) ([]models.AppBanner, error) {
+func (r *AppConfigRepository) GetBanners(ctx context.Context, onlyActive bool) ([]models.AppBanner, error) {
 	query := `SELECT id, image_url, title, link_url, order_index, is_active, created_at 
-	          FROM app_banners WHERE is_active = TRUE ORDER BY order_index ASC`
+	          FROM app_banners`
+	if onlyActive {
+		query += " WHERE is_active = TRUE"
+	}
+	query += " ORDER BY order_index ASC"
 	
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
