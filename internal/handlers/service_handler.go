@@ -55,6 +55,7 @@ func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 				Title:     svc.Title,
 				NewLink:   "/" + models.Slugify(cat.Name) + "/" + models.Slugify(svc.Title),
 				Form:      svc.FormSchema,
+				IsActive:  svc.IsActive,
 			})
 		}
 

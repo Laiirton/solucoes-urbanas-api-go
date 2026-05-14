@@ -55,6 +55,7 @@ type ServiceItemResponse struct {
 	Title     string          `json:"title"`
 	NewLink   string          `json:"newLink"`
 	Form      json.RawMessage `json:"form"`
+	IsActive  bool            `json:"is_active"`
 }
 
 type UpdateServiceRequest struct {
