@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 )
@@ -27,6 +29,26 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error) {
+	// Check for duplicates
+	var field string
+	err := r.db.QueryRow(ctx, `
+		SELECT 
+		       CASE 
+		           WHEN username = $1 THEN 'username'
+		           WHEN email = $2 THEN 'email'
+		           WHEN cpf = $3 THEN 'cpf'
+		       END as duplicated_field
+		FROM users 
+		WHERE username = $1 OR email = $2 OR cpf = $3
+		LIMIT 1`, req.Username, req.Email, *req.CPF).Scan(&field)
+
+	if err == nil {
+		return nil, fmt.Errorf("a user with this %s already exists", field)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("failed to check for duplicates: %w", err)
+	}
+
 	var workAreaJSON []byte
 	if req.WorkArea != nil {
 		var err error
@@ -53,7 +75,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, req *models.CreateUserR
 	user := &models.User{}
 	var workAreaResult []byte
 	var bd time.Time
-	err := r.db.QueryRow(ctx, query,
+	err = r.db.QueryRow(ctx, query,
 		req.Username, hashedPassword, req.Email,
 		req.FullName, req.CPF, req.Phone, birthDate, req.Type,
 		req.TeamID, workAreaJSON, req.ProfileImageURL,

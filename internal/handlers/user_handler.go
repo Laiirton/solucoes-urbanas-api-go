@@ -58,6 +58,38 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate authentication and authorization
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	currentUser, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get current user")
+		return
+	}
+
+	if currentUser.Type == nil {
+		respondError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	switch *currentUser.Type {
+	case "admin":
+		// Admin can create any type of user
+	case "secretary":
+		// Secretary can only create attendants
+		if req.Type == nil || *req.Type != "attendant" {
+			respondError(w, http.StatusForbidden, "secretaries can only create attendants")
+			return
+		}
+	default:
+		respondError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
 	// Generate automatic password if not provided: CPF + birth date (digits only)
 	if req.Password == "" {
 		nonDigits := regexp.MustCompile("[^0-9]")
