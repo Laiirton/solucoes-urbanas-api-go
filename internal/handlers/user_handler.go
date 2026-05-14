@@ -63,6 +63,18 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if users == nil {
 		users = []*models.User{}
 	}
+
+	// Filter out current user if it's a secretary
+	if currentUser.Type != nil && *currentUser.Type == "secretary" {
+		filtered := []*models.User{}
+		for _, u := range users {
+			if u.ID != userID {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
+
 	respondJSON(w, http.StatusOK, users)
 }
 
