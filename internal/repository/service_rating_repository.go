@@ -91,3 +91,18 @@ func (r *ServiceRatingRepository) ListByServiceID(ctx context.Context, serviceID
 	}
 	return ratings, nil
 }
+
+func (r *ServiceRatingRepository) GetAverageRatingByCategoryID(ctx context.Context, categoryID int64) (float64, error) {
+	query := `
+		SELECT COALESCE(AVG(sr.stars), 0) 
+		FROM service_ratings sr
+		JOIN services s ON sr.service_id = s.id
+		WHERE s.category_id = $1`
+
+	var avg float64
+	err := r.db.QueryRow(ctx, query, categoryID).Scan(&avg)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get average rating by category: %w", err)
+	}
+	return avg, nil
+}

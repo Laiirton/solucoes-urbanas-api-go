@@ -143,13 +143,19 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 			}
 		}
 		
+		avgRating := 0.0
+		stats, err := h.ratingRepo.GetStatsByServiceID(r.Context(), s.ID)
+		if err == nil {
+			avgRating = stats.Average
+		}
+
 		serviceDetails[i] = models.CategoryServiceDetail{
 			ID:                s.ID,
 			Title:             s.Title,
 			IsActive:          s.IsActive,
 			TotalRequests:     serviceRequests,
 			CompletedRequests: serviceCompleted,
-			AverageRating:     4.5, // Mock for now
+			AverageRating:     avgRating,
 		}
 	}
 
@@ -183,6 +189,8 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
+	categoryAvgRating, _ := h.ratingRepo.GetAverageRatingByCategoryID(r.Context(), id)
+
 	resp := models.CategoryDashboardResponse{
 		Category: models.CategoryInfo{
 			Name: cat.Name,
@@ -192,7 +200,7 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 			TotalServices:         len(services),
 			TotalTeams:            len(teams),
 			TotalRequests:         totalRequests,
-			AverageRating:         4.5, // Mock for now
+			AverageRating:         categoryAvgRating,
 			AverageResolutionDays: avgResolutionDays,
 		},
 		StatusDistribution: statusDist,
