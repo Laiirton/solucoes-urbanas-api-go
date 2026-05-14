@@ -158,19 +158,19 @@ func Setup(
 				r.Delete("/news/{id}", newsHandler.DeleteNews)
 			})
 
-			// Users creation (Admin and Secretary)
+			// Users creation and listing (Admin and Secretary)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(userRepo, "admin", "secretary"))
 				r.Post("/users", userHandler.CreateUser)
+				r.Get("/users", userHandler.ListUsers)
+				r.Get("/users/{id}", userHandler.GetUser)
 			})
 
 			// Admin-only routes
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(userRepo, "admin"))
 
-				// Users
-				r.Get("/users", userHandler.ListUsers)
-				r.Get("/users/{id}", userHandler.GetUser)
+				// Users (Write ops except create)
 				r.Put("/users/{id}", userHandler.UpdateUser)
 				r.Delete("/users/{id}", userHandler.DeleteUser)
 				r.Post("/users/{id}/profile-image", userHandler.UploadProfileImage)
