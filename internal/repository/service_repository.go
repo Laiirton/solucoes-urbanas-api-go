@@ -240,6 +240,15 @@ func (r *ServiceRepository) UpdateService(ctx context.Context, id int64, req *mo
 	return svc, nil
 }
 
+func (r *ServiceRepository) DeactivateServicesByCategoryID(ctx context.Context, categoryID int64) error {
+	query := `UPDATE services SET is_active = FALSE, updated_at = NOW() WHERE category_id = $1`
+	_, err := r.db.Exec(ctx, query, categoryID)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate services by category id: %w", err)
+	}
+	return nil
+}
+
 func (r *ServiceRepository) ListCategories(ctx context.Context, onlyActive bool, allowedCategories []string) ([]string, error) {
 	var conditions []string
 	var args []interface{}

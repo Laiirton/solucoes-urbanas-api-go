@@ -98,6 +98,15 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusNotFound, "category not found or update failed")
 		return
 	}
+
+	if req.IsActive != nil && !*req.IsActive {
+		err := h.serviceRepo.DeactivateServicesByCategoryID(r.Context(), id)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "category updated but failed to deactivate services: "+err.Error())
+			return
+		}
+	}
+
 	respondJSON(w, http.StatusOK, cat)
 }
 
