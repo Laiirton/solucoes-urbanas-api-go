@@ -181,7 +181,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	return user, nil
 }
 
-func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, page, limit int) ([]*models.User, error) {
+func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, teamID *int64, page, limit int) ([]*models.User, error) {
 	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.description, t.region_id, COALESCE(rg.name, ''), t.created_at, t.updated_at
  FROM users u
@@ -202,8 +202,19 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 			query += fmt.Sprintf(` AND u.type ILIKE $%d`, len(args)+1)
 		} else {
 			query += ` WHERE u.type ILIKE $1`
+			whereApplied = true
 		}
 		args = append(args, userType)
+	}
+
+	if teamID != nil {
+		if whereApplied {
+			query += fmt.Sprintf(` AND u.team_id = $%d`, len(args)+1)
+		} else {
+			query += ` WHERE u.team_id = $1`
+			whereApplied = true
+		}
+		args = append(args, *teamID)
 	}
 
 	query += ` ORDER BY u.id ASC`

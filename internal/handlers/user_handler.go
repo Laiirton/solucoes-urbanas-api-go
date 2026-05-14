@@ -34,7 +34,28 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userType := r.URL.Query().Get("type")
 	page, limit := parsePagination(r)
 
-	users, err := h.userRepo.ListUsers(r.Context(), search, userType, page, limit)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	currentUser, err := h.userRepo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	var teamFilter *int64
+	if currentUser.Type != nil && *currentUser.Type == "secretary" {
+		teamFilter = currentUser.TeamID
+		if teamFilter == nil {
+			respondJSON(w, http.StatusOK, []*models.User{})
+			return
+		}
+	}
+
+	users, err := h.userRepo.ListUsers(r.Context(), search, userType, teamFilter, page, limit)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list users")
 		return
