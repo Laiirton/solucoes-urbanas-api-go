@@ -61,7 +61,7 @@ func Setup(
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
-	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo)
+	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo, srRepo, teamRepo, ratingRepo)
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
@@ -205,10 +205,11 @@ func Setup(
 				r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
 				r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
 
-				// Categories (write)
+				// Categories
 				r.Post("/categories", categoryHandler.CreateCategory)
 				r.Put("/categories/{id}", categoryHandler.UpdateCategory)
 				r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+				r.Get("/categories/{id}/dashboard", categoryHandler.GetCategoryDetails)
 			})
 		})
 	})

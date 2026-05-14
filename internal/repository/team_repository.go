@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -352,4 +353,37 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 	}
 
 	return stats, nil
+}
+
+func (r *TeamRepository) ListTeamsByWorkArea(ctx context.Context, categoryName string) ([]*models.Team, error) {
+	catJSON, _ := json.Marshal(categoryName)
+	query := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE t.id IN (
+			SELECT DISTINCT team_id FROM users 
+			WHERE type = 'secretary' AND work_area @> $1::jsonb AND team_id IS NOT NULL
+		)`
+
+	rows, err := r.db.Query(ctx, query, string(catJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list teams by work area: %w", err)
+	}
+	defer rows.Close()
+
+	var teams []*models.Team
+	for rows.Next() {
+		team := &models.Team{}
+		if err := rows.Scan(
+			&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan team: %w", err)
+		}
+		teams = append(teams, team)
+	}
+	if teams == nil {
+		teams = []*models.Team{}
+	}
+	return teams, nil
 }

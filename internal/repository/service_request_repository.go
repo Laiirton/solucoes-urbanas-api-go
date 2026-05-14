@@ -310,6 +310,27 @@ func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context
 	return r.scanServiceRequests(ctx, query, args...)
 }
 
+func (r *ServiceRequestRepository) ListServiceRequestsByCategory(ctx context.Context, category string, limit int) ([]*models.ServiceRequest, error) {
+	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
+	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
+	                 sr.latitude, sr.longitude, sr.geocoded_address,
+	                 sr.team_id, COALESCE(t.name, ''),
+	                 sr.region_id, COALESCE(rg.name, ''),
+	                 sr.created_at, sr.updated_at
+	          FROM service_requests sr
+	          LEFT JOIN users u ON sr.user_id = u.id
+	          LEFT JOIN teams t ON sr.team_id = t.id
+	          LEFT JOIN regions rg ON sr.region_id = rg.id
+	          WHERE sr.category = $1
+	          ORDER BY sr.id DESC`
+	
+	if limit > 0 {
+		query += fmt.Sprintf(` LIMIT %d`, limit)
+	}
+
+	return r.scanServiceRequests(ctx, query, category)
+}
+
 func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, query string, args ...interface{}) ([]*models.ServiceRequest, error) {
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
