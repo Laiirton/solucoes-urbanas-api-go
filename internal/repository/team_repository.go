@@ -54,6 +54,11 @@ func (r *TeamRepository) GetTeamByID(ctx context.Context, id int64) (*models.Tea
 		return nil, fmt.Errorf("team not found: %w", err)
 	}
 
+	workAreas, err := r.getTeamWorkAreas(ctx, id)
+	if err == nil {
+		team.WorkAreas = workAreas
+	}
+
 	return team, nil
 }
 
@@ -91,6 +96,21 @@ func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, lim
 			return nil, fmt.Errorf("failed to scan team: %w", err)
 		}
 		teams = append(teams, team)
+	}
+
+	if len(teams) > 0 {
+		ids := make([]int64, len(teams))
+		for i, t := range teams {
+			ids[i] = t.ID
+		}
+		areasMap, err := r.getTeamsWorkAreas(ctx, ids)
+		if err == nil {
+			for _, t := range teams {
+				if wa, ok := areasMap[t.ID]; ok {
+					t.WorkAreas = wa
+				}
+			}
+		}
 	}
 
 	if teams == nil {
@@ -444,4 +464,52 @@ func (r *TeamRepository) ListTeamsByWorkArea(ctx context.Context, categoryName s
 		teams = []*models.Team{}
 	}
 	return teams, nil
+}
+
+func (r *TeamRepository) getTeamWorkAreas(ctx context.Context, teamID int64) ([]string, error) {
+	query := `
+		SELECT DISTINCT jsonb_array_elements_text(work_area)
+		FROM users
+		WHERE team_id = $1 AND type = 'secretary' AND work_area IS NOT NULL`
+
+	rows, err := r.db.Query(ctx, query, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var areas []string
+	for rows.Next() {
+		var wa string
+		if err := rows.Scan(&wa); err == nil {
+			areas = append(areas, wa)
+		}
+	}
+	if areas == nil {
+		areas = []string{}
+	}
+	return areas, nil
+}
+
+func (r *TeamRepository) getTeamsWorkAreas(ctx context.Context, teamIDs []int64) (map[int64][]string, error) {
+	query := `
+		SELECT u.team_id, jsonb_array_elements_text(u.work_area)
+		FROM users u
+		WHERE u.team_id = ANY($1) AND u.type = 'secretary' AND u.work_area IS NOT NULL`
+
+	rows, err := r.db.Query(ctx, query, teamIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	areasMap := make(map[int64][]string)
+	for rows.Next() {
+		var teamID int64
+		var wa string
+		if err := rows.Scan(&teamID, &wa); err == nil {
+			areasMap[teamID] = append(areasMap[teamID], wa)
+		}
+	}
+	return areasMap, nil
 }

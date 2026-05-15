@@ -8,6 +8,7 @@ type Team struct {
 	RegionID    *int64    `json:"region_id,omitempty"`
 	RegionName  string    `json:"region_name,omitempty"`
 	Description *string   `json:"description,omitempty"`
+	WorkAreas   []string  `json:"work_areas,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

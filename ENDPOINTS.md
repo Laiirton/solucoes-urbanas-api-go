@@ -271,7 +271,7 @@ Todos endpoints dessa seção exigem autenticação JWT.
     ```json
     {
       "name": "Nome da Equipe",
-      "service_category": "Categoria de Serviço",
+      "region_id": 1,
       "description": "Descrição da equipe"
     }
     ```
@@ -283,7 +283,7 @@ Todos endpoints dessa seção exigem autenticação JWT.
     ```json
     {
       "name": "Novo Nome",
-      "service_category": "Nova Categoria",
+      "region_id": 1,
       "description": "Nova descrição"
     }
     ```
