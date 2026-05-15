@@ -202,7 +202,7 @@ func (r *TeamRepository) FindTeamByRegionAndCategory(ctx context.Context, region
 			SELECT u.team_id FROM users u
 			WHERE u.team_id IS NOT NULL
 			  AND u.type = 'secretary'
-			  AND u.work_area @> $2::jsonb
+			  AND u.work_area::jsonb @> $2::jsonb
 		  )
 		LIMIT 1`
 
@@ -441,7 +441,7 @@ func (r *TeamRepository) ListTeamsByWorkArea(ctx context.Context, categoryName s
 		LEFT JOIN regions rg ON t.region_id = rg.id
 		WHERE t.id IN (
 			SELECT DISTINCT team_id FROM users 
-			WHERE type = 'secretary' AND work_area @> $1::jsonb AND team_id IS NOT NULL
+			WHERE type = 'secretary' AND work_area::jsonb @> $1::jsonb AND team_id IS NOT NULL
 		)`
 
 	rows, err := r.db.Query(ctx, query, string(catJSON))
@@ -468,7 +468,7 @@ func (r *TeamRepository) ListTeamsByWorkArea(ctx context.Context, categoryName s
 
 func (r *TeamRepository) getTeamWorkAreas(ctx context.Context, teamID int64) ([]string, error) {
 	query := `
-		SELECT DISTINCT jsonb_array_elements_text(work_area)
+		SELECT DISTINCT jsonb_array_elements_text(work_area::jsonb)
 		FROM users
 		WHERE team_id = $1 AND type = 'secretary' AND work_area IS NOT NULL`
 
@@ -493,7 +493,7 @@ func (r *TeamRepository) getTeamWorkAreas(ctx context.Context, teamID int64) ([]
 
 func (r *TeamRepository) getTeamsWorkAreas(ctx context.Context, teamIDs []int64) (map[int64][]string, error) {
 	query := `
-		SELECT u.team_id, jsonb_array_elements_text(u.work_area)
+		SELECT u.team_id, jsonb_array_elements_text(u.work_area::jsonb)
 		FROM users u
 		WHERE u.team_id = ANY($1) AND u.type = 'secretary' AND u.work_area IS NOT NULL`
 
