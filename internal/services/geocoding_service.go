@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-// DefaultCityCoordinates - coordenadas padrão da cidade (Cacimbas-PB)
+// DefaultCityCoordinates - coordenadas padrão da cidade (Desterro-PB)
 const (
-	DefaultLatitude  = -7.2000
-	DefaultLongitude = -37.8000
-	DefaultCity      = "Cacimbas"
+	DefaultLatitude  = -7.2870
+	DefaultLongitude = -37.0920
+	DefaultCity      = "Desterro"
 	DefaultState     = "Paraíba"
 	DefaultCountry   = "Brasil"
 )
@@ -85,7 +85,7 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	q.Add("limit", "1")
 	q.Add("addressdetails", "1")
 	q.Add("countrycodes", "br")
-	q.Add("viewbox", "-38.0000,-7.0000,-37.6000,-7.4000")
+	q.Add("viewbox", "-37.2000,-7.2000,-36.9000,-7.3500")
 	reqURL.RawQuery = q.Encode()
 
 	req, err := http.NewRequest(http.MethodGet, reqURL.String(), nil)
@@ -148,6 +148,86 @@ func (s *GeocodingService) GeocodeAddress(address string) (*GeocodingResult, err
 	return &GeocodingResult{
 		Latitude:    lat,
 		Longitude:   lon,
+		DisplayName: displayName,
+		Bairro:      bairro,
+		Found:       true,
+	}, nil
+}
+
+// ReverseGeocode busca endereço a partir de coordenadas (Nominatim reverse).
+// Retorna o bairro e o endereço formatado.
+func (s *GeocodingService) ReverseGeocode(latitude, longitude float64) (*GeocodingResult, error) {
+	if latitude == 0 && longitude == 0 {
+		return &GeocodingResult{Found: false}, nil
+	}
+
+	reqURL := "https://nominatim.openstreetmap.org/reverse"
+	u, err := url.Parse(reqURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse reverse URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Add("lat", strconv.FormatFloat(latitude, 'f', 6, 64))
+	q.Add("lon", strconv.FormatFloat(longitude, 'f', 6, 64))
+	q.Add("format", "json")
+	q.Add("addressdetails", "1")
+	q.Add("zoom", "16")
+	q.Add("accept-language", "pt")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return &GeocodingResult{
+			Latitude:  latitude,
+			Longitude: longitude,
+			Found:     false,
+		}, nil
+	}
+
+	req.Header.Set("User-Agent", "SolucoesUrbanas-API/1.0")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return &GeocodingResult{
+			Latitude:  latitude,
+			Longitude: longitude,
+			Found:     false,
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &GeocodingResult{
+			Latitude:  latitude,
+			Longitude: longitude,
+			Found:     false,
+		}, nil
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return &GeocodingResult{
+			Latitude:  latitude,
+			Longitude: longitude,
+			Found:     false,
+		}, nil
+	}
+
+	if result == nil || result["error"] != nil {
+		return &GeocodingResult{
+			Latitude:  latitude,
+			Longitude: longitude,
+			Found:     false,
+		}, nil
+	}
+
+	displayName, _ := result["display_name"].(string)
+	bairro := extractBairroFromNominatim(result)
+
+	return &GeocodingResult{
+		Latitude:    latitude,
+		Longitude:   longitude,
 		DisplayName: displayName,
 		Bairro:      bairro,
 		Found:       true,

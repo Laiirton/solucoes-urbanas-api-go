@@ -412,6 +412,47 @@ func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Contex
 	return sr, nil
 }
 
+func (r *ServiceRequestRepository) UpdateServiceRequest(ctx context.Context, id int64, req *models.CreateServiceRequestRequest) (*models.ServiceRequest, error) {
+	query := `
+		WITH updated AS (
+			UPDATE service_requests
+			SET request_data = $2, attachments = $3, updated_at = NOW()
+			WHERE id = $1
+			RETURNING id, user_id, service_id, protocol_number, service_title, category,
+			          request_data, attachments, status, latitude, longitude, geocoded_address,
+			          team_id, region_id, created_at, updated_at
+		)
+		SELECT u.id, u.user_id, COALESCE(u2.full_name, ''), u.service_id, u.protocol_number,
+		       u.service_title, u.category, u.request_data, u.attachments, u.status,
+		       u.latitude, u.longitude, u.geocoded_address,
+		       u.team_id, COALESCE(t.name, ''),
+		       u.region_id, COALESCE(rg.name, ''),
+		       u.created_at, u.updated_at
+		FROM updated u
+		LEFT JOIN users u2 ON u.user_id = u2.id
+		LEFT JOIN teams t ON u.team_id = t.id
+		LEFT JOIN regions rg ON u.region_id = rg.id`
+
+	sr := &models.ServiceRequest{}
+	err := r.db.QueryRow(ctx, query, id, req.RequestData, req.Attachments).Scan(
+		&sr.ID, &sr.UserID, &sr.UserName, &sr.ServiceID, &sr.ProtocolNumber,
+		&sr.ServiceTitle, &sr.Category, &sr.RequestData,
+		&sr.Attachments, &sr.Status, &sr.Latitude, &sr.Longitude, &sr.GeocodedAddress,
+		&sr.TeamID, &sr.TeamName,
+		&sr.RegionID, &sr.RegionName,
+		&sr.CreatedAt, &sr.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update service request: %w", err)
+	}
+
+	if sr.ServiceID != nil {
+		sr.Icon = models.GetServiceIcon(*sr.ServiceID)
+	}
+
+	return sr, nil
+}
+
 func (r *ServiceRequestRepository) DeleteServiceRequest(ctx context.Context, id int64) error {
 	result, err := r.db.Exec(ctx, `DELETE FROM service_requests WHERE id = $1`, id)
 	if err != nil {

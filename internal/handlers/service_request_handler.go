@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -126,25 +127,46 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 	var geoLat, geoLon *float64
 	var geoAddress *string
 
-	address := extractAddressFromRequestData(req.RequestData)
-	if address != "" {
-		geoResult, err := h.geoService.GeocodeAddress(address)
-		if err == nil && geoResult.Found {
-			geoLat = &geoResult.Latitude
-			geoLon = &geoResult.Longitude
-			geoAddress = &geoResult.DisplayName
+	// 1. Extract bairro and coordinates from app's request_data (user map selection)
+	appBairro := extractBairroFromRequestData(req.RequestData)
+	appLat, appLon := extractCoordinatesFromRequestData(req.RequestData)
+	appAddress := extractAddressFromRequestData(req.RequestData)
 
-			if geoResult.Bairro != "" {
-				region, err := h.regionRepo.FindByNeighborhood(r.Context(), geoResult.Bairro)
-				if err == nil {
-					regionID = &region.ID
-					team, err := h.teamRepo.GetTeamByRegion(r.Context(), region.ID)
-					if err == nil {
-						teamID = &team.ID
-					}
-				}
+	// 2. Use app's bairro as primary source (most reliable, zero external API)
+	if appBairro != "" {
+		regionID, teamID = h.lookupRegionAndTeam(r.Context(), appBairro, regionID, teamID)
+	}
+
+	// 3. If no bairro from app, try reverse geocode from coordinates
+	if appBairro == "" && appLat != nil && appLon != nil {
+		geoResult, err := h.geoService.ReverseGeocode(*appLat, *appLon)
+		if err == nil && geoResult.Found {
+			geoAddress = &geoResult.DisplayName
+			if geoResult.Bairro != "" && regionID == nil {
+				regionID, teamID = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, regionID, teamID)
 			}
 		}
+	}
+
+	// 4. Fallback: forward geocode from address text (original behavior)
+	if regionID == nil && appAddress != "" {
+		geoResult, err := h.geoService.GeocodeAddress(appAddress)
+		if err == nil && geoResult.Found {
+			if geoAddress == nil {
+				geoAddress = &geoResult.DisplayName
+			}
+			if geoResult.Bairro != "" && regionID == nil {
+				regionID, teamID = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, regionID, teamID)
+			}
+		}
+	}
+
+	// 5. Always use user's original coordinates when available
+	if appLat != nil && appLon != nil {
+		geoLat = appLat
+		geoLon = appLon
+	} else if geoLat == nil && geoLon == nil && appAddress != "" {
+		// Preserve geocoded coords as fallback
 	}
 
 	sr, err := h.srRepo.CreateServiceRequest(r.Context(), &userID, &req, regionID, teamID, geoLat, geoLon, geoAddress)
@@ -194,6 +216,98 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 	detail.Attendances = attendances
 
 	respondJSON(w, http.StatusOK, detail)
+}
+
+// PUT /service-requests/{id}
+func (h *ServiceRequestHandler) UpdateServiceRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid service request id")
+		return
+	}
+
+	existing, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+	if existing.UserID == nil || *existing.UserID != userID {
+		respondError(w, http.StatusForbidden, "you do not have permission to update this request")
+		return
+	}
+	if existing.Status != "pending" {
+		respondError(w, http.StatusBadRequest, "only pending requests can be edited")
+		return
+	}
+
+	var req models.CreateServiceRequestRequest
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(services.MaxTotalFilesSizeBytes); err != nil {
+			respondError(w, http.StatusBadRequest, "failed to parse multipart form")
+			return
+		}
+
+		requestData := r.FormValue("request_data")
+		if requestData != "" {
+			req.RequestData = []byte(requestData)
+		} else {
+			req.RequestData = []byte("{}")
+		}
+
+		// Preserve existing attachments that haven't been removed
+		oldURLs := services.ParseAttachmentURLs(existing.Attachments)
+		keepURLs := make(map[string]bool)
+		for _, u := range oldURLs {
+			keepURLs[u] = true
+		}
+
+		// Upload new files
+		files := r.MultipartForm.File["files"]
+		if len(files) > 0 {
+			newURLs, err := h.uploadService.UploadServiceRequestFiles(userID, files)
+			if err != nil {
+				respondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			for _, u := range newURLs {
+				keepURLs[u] = true
+			}
+		}
+
+		var finalURLs []string
+		for u := range keepURLs {
+			finalURLs = append(finalURLs, u)
+		}
+		if len(finalURLs) > 0 {
+			urlsJSON, _ := json.Marshal(finalURLs)
+			req.Attachments = urlsJSON
+		}
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+	}
+
+	if len(req.RequestData) == 0 {
+		req.RequestData = []byte("{}")
+	}
+
+	sr, err := h.srRepo.UpdateServiceRequest(r.Context(), id, &req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, sr)
 }
 
 // PATCH /service-requests/{id}/status
@@ -275,19 +389,119 @@ func extractAddressFromRequestData(requestData json.RawMessage) string {
 	if err := json.Unmarshal(requestData, &data); err != nil {
 		return ""
 	}
+	return getFirstNonEmpty(data, "endereco", "address", "logradouro", "street")
+}
 
-	if addr, ok := data["endereco"].(string); ok && addr != "" {
-		return addr
-	}
-	if addr, ok := data["address"].(string); ok && addr != "" {
-		return addr
-	}
-	if addr, ok := data["logradouro"].(string); ok && addr != "" {
-		return addr
-	}
-	if addr, ok := data["street"].(string); ok && addr != "" {
-		return addr
+// extractBairroFromRequestData extrai o bairro enviado pelo app (via MapModal)
+func extractBairroFromRequestData(requestData json.RawMessage) string {
+	if len(requestData) == 0 {
+		return ""
 	}
 
+	var data map[string]interface{}
+	if err := json.Unmarshal(requestData, &data); err != nil {
+		return ""
+	}
+
+	// Tenta "endereco_bairro" primeiro (enviado explicitamente pelo app)
+	if bairro := getField[string](data, "endereco_bairro"); bairro != "" {
+		return bairro
+	}
+	// Fallback: tenta "localizacao_bairro" (se o campo se chamar "localizacao")
+	if bairro := getField[string](data, "localizacao_bairro"); bairro != "" {
+		return bairro
+	}
 	return ""
+}
+
+// extractCoordinatesFromRequestData extrai as coordenadas do JSON de request_data
+// enviadas pelo app quando o usuário seleciona no mapa
+func extractCoordinatesFromRequestData(requestData json.RawMessage) (*float64, *float64) {
+	if len(requestData) == 0 {
+		return nil, nil
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(requestData, &data); err != nil {
+		return nil, nil
+	}
+
+	keys := []string{"endereco_coords", "localizacao_coords"}
+	for _, key := range keys {
+		if coords, ok := data[key].(map[string]interface{}); ok {
+			lat, hasLat := getNestedFloat(data, key, "latitude")
+			lon, hasLon := getNestedFloat(data, key, "longitude")
+			if hasLat && hasLon {
+				return &lat, &lon
+			}
+			// Try direct keys inside coords object
+			if latVal, ok := coords["latitude"].(float64); ok {
+				if lonVal, ok := coords["longitude"].(float64); ok {
+					return &latVal, &lonVal
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// getFirstNonEmpty returns the first non-empty string value for the given keys
+func getFirstNonEmpty(data map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := data[key].(string); ok && val != "" {
+			return val
+		}
+	}
+	return ""
+}
+
+// getField extracts a typed field from a map
+func getField[T any](data map[string]interface{}, key string) T {
+	var zero T
+	if val, ok := data[key]; ok {
+		if typed, ok := val.(T); ok {
+			return typed
+		}
+	}
+	return zero
+}
+
+// getNestedFloat extracts a float from a nested object path like "endereco_coords.latitude"
+func getNestedFloat(data map[string]interface{}, objKey, fieldKey string) (float64, bool) {
+	if obj, ok := data[objKey].(map[string]interface{}); ok {
+		if val, ok := obj[fieldKey]; ok {
+			switch v := val.(type) {
+			case float64:
+				return v, true
+			case int:
+				return float64(v), true
+			case int64:
+				return float64(v), true
+			}
+		}
+	}
+	return 0, false
+}
+
+// lookupRegionAndTeam tenta encontrar região pelo bairro (exato + case-insensitive como fallback)
+func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro string, currentRegionID, currentTeamID *int64) (*int64, *int64) {
+	if bairro == "" {
+		return currentRegionID, currentTeamID
+	}
+
+	region, err := h.regionRepo.FindByNeighborhood(ctx, bairro)
+	if err != nil {
+		region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
+	}
+	if err != nil {
+		return currentRegionID, currentTeamID
+	}
+
+	regionID := &region.ID
+	team, err := h.teamRepo.GetTeamByRegion(ctx, region.ID)
+	if err != nil {
+		return regionID, currentTeamID
+	}
+	return regionID, &team.ID
 }

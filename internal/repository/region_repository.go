@@ -125,6 +125,26 @@ func (r *RegionRepository) FindByNeighborhood(ctx context.Context, bairro string
 	return region, nil
 }
 
+// FindByNeighborhoodCaseInsensitive busca região por nome do bairro ignorando acentos e caixa.
+// Usa a extensão unaccent do PostgreSQL para comparação flexível.
+func (r *RegionRepository) FindByNeighborhoodCaseInsensitive(ctx context.Context, bairro string) (*models.Region, error) {
+	region := &models.Region{}
+	err := r.db.QueryRow(ctx,
+		`SELECT id, name, neighborhoods, created_at, updated_at
+		 FROM regions
+		 WHERE EXISTS (
+			 SELECT 1 FROM jsonb_array_elements_text(neighborhoods) AS nb
+			 WHERE LOWER(TRANSLATE(nb, 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE($1, 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'))
+		 )
+		 LIMIT 1`,
+		bairro,
+	).Scan(&region.ID, &region.Name, &region.Neighborhoods, &region.CreatedAt, &region.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("no region found for neighborhood '%s': %w", bairro, err)
+	}
+	return region, nil
+}
+
 // ListAll returns all regions (used for matching region from address text).
 func (r *RegionRepository) ListAll(ctx context.Context) ([]*models.Region, error) {
 	return r.List(ctx, "", 1, 1000)

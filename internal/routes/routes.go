@@ -126,6 +126,7 @@ func Setup(
 			r.Get("/service-requests", srHandler.ListServiceRequests)
 			r.Route("/service-requests/{id}", func(r chi.Router) {
 				r.Get("/", srHandler.GetServiceRequest)
+				r.Put("/", srHandler.UpdateServiceRequest)
 				r.Patch("/status", srHandler.UpdateServiceRequestStatus)
 				r.Delete("/", srHandler.DeleteServiceRequest)
 
