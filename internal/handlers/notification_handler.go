@@ -219,15 +219,16 @@ func (h *NotificationHandler) MarkSystemNotificationAsRead(w http.ResponseWriter
 			respondError(w, http.StatusForbidden, "you do not have permission to modify this notification")
 			return
 		}
-	}
-
-	updated, err := h.sysNotifRepo.MarkAsRead(r.Context(), id)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		updated, err := h.sysNotifRepo.MarkAsRead(r.Context(), id, userID)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, updated)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, updated)
+	respondError(w, http.StatusUnauthorized, "unauthorized")
 }
 
 func (h *NotificationHandler) DeleteSystemNotification(w http.ResponseWriter, r *http.Request) {
