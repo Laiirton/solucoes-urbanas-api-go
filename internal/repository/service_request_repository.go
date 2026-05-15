@@ -43,9 +43,9 @@ func (r *ServiceRequestRepository) CreateServiceRequest(ctx context.Context, use
 		RETURNING id, user_id, service_id, protocol_number, service_title, category,
 		          request_data, attachments, status, latitude, longitude, geocoded_address,
 		          team_id, region_id,
-		          (SELECT COALESCE(full_name, '') FROM users WHERE id = $1),
-		          (SELECT COALESCE(name, '') FROM teams WHERE id = $7),
-		          (SELECT COALESCE(name, '') FROM regions WHERE id = $8),
+		          COALESCE((SELECT full_name FROM users WHERE id = $1), ''),
+		          COALESCE((SELECT name FROM teams WHERE id = $7), ''),
+		          COALESCE((SELECT name FROM regions WHERE id = $8), ''),
 		          created_at, updated_at`
 
 sr := &models.ServiceRequest{}
