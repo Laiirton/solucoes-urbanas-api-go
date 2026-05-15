@@ -20,7 +20,7 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "missing or invalid authorization header"})
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Token de acesso não encontrado"})
 				return
 			}
 
@@ -33,19 +33,19 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 			})
 
 			if err != nil || !token.Valid {
-				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid or expired token"})
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Sessão expirada. Faça login novamente."})
 				return
 			}
 
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok {
-				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid token claims"})
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Erro ao validar token"})
 				return
 			}
 
 			userID, ok := claims["user_id"].(float64)
 			if !ok {
-				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid token payload"})
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Token inválido"})
 				return
 			}
 
@@ -62,13 +62,13 @@ func RequireRole(userRepo *repository.UserRepository, roles ...string) func(http
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, ok := r.Context().Value(UserIDKey).(int64)
 			if !ok {
-				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "unauthorized"})
+				respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Não autenticado"})
 				return
 			}
 
 			user, err := userRepo.GetUserByID(r.Context(), userID)
 			if err != nil || user.Type == nil {
-				respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "forbidden"})
+				respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "Acesso negado"})
 				return
 			}
 
@@ -79,7 +79,7 @@ func RequireRole(userRepo *repository.UserRepository, roles ...string) func(http
 				}
 			}
 
-			respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "forbidden"})
+			respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "Você não tem permissão para acessar este recurso"})
 		})
 	}
 }

@@ -75,27 +75,27 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	currentHash, err := h.userRepo.GetUserPasswordHash(r.Context(), userID)
 	if err != nil {
-		respondError(w, http.StatusUnauthorized, "user not found")
+		respondError(w, http.StatusBadRequest, "Usuário não encontrado")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
-		respondError(w, http.StatusUnauthorized, "current password is incorrect")
+		respondError(w, http.StatusBadRequest, "Senha atual incorreta")
 		return
 	}
 
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to hash password")
+		respondError(w, http.StatusInternalServerError, "Erro ao processar nova senha")
 		return
 	}
 
 	if err := h.userRepo.UpdatePassword(r.Context(), userID, string(newHash)); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to update password")
+		respondError(w, http.StatusInternalServerError, "Erro ao salvar nova senha")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "password updated successfully"})
+	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "Senha alterada com sucesso"})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {

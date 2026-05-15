@@ -84,13 +84,13 @@ type ChangePasswordRequest struct {
 
 func (r *ChangePasswordRequest) Validate() error {
 	if r.OldPassword == "" {
-		return fmt.Errorf("old_password is required")
+		return fmt.Errorf("Senha atual é obrigatória")
 	}
 	if r.NewPassword == "" {
-		return fmt.Errorf("new_password is required")
+		return fmt.Errorf("Nova senha é obrigatória")
 	}
 	if len(r.NewPassword) < 6 {
-		return fmt.Errorf("new_password must be at least 6 characters")
+		return fmt.Errorf("Nova senha deve ter no mínimo 6 caracteres")
 	}
 	return nil
 }
