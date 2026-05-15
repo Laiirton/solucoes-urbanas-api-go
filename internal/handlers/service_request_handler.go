@@ -126,6 +126,15 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 	var regionID, teamID *int64
 	var geoLat, geoLon *float64
 	var geoAddress *string
+	var serviceCategory string
+
+	// 0. Get service category for team routing (match by work_area)
+	if req.ServiceID != nil {
+		cat, err := h.srRepo.GetServiceCategory(r.Context(), *req.ServiceID)
+		if err == nil {
+			serviceCategory = cat
+		}
+	}
 
 	// 1. Extract bairro and coordinates from app's request_data (user map selection)
 	appBairro := extractBairroFromRequestData(req.RequestData)
@@ -134,34 +143,43 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 
 	// 2. Use app's bairro as primary source (most reliable, zero external API)
 	if appBairro != "" {
-		regionID, teamID = h.lookupRegionAndTeam(r.Context(), appBairro, regionID, teamID)
+		regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), appBairro, serviceCategory, regionID, teamID)
 	}
 
 	// 3. If no bairro from app, try reverse geocode from coordinates
-	if appBairro == "" && appLat != nil && appLon != nil {
+	if regionID == nil && appLat != nil && appLon != nil {
 		geoResult, err := h.geoService.ReverseGeocode(*appLat, *appLon)
 		if err == nil && geoResult.Found {
 			geoAddress = &geoResult.DisplayName
-			if geoResult.Bairro != "" && regionID == nil {
-				regionID, teamID = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, regionID, teamID)
+			if geoResult.Bairro != "" {
+				regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
 			}
 		}
 	}
 
-	// 4. Fallback: forward geocode from address text (original behavior)
+	// 4. Fallback: forward geocode from address text
 	if regionID == nil && appAddress != "" {
 		geoResult, err := h.geoService.GeocodeAddress(appAddress)
 		if err == nil && geoResult.Found {
 			if geoAddress == nil {
 				geoAddress = &geoResult.DisplayName
 			}
-			if geoResult.Bairro != "" && regionID == nil {
-				regionID, teamID = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, regionID, teamID)
+			if geoResult.Bairro != "" {
+				regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
 			}
 		}
 	}
 
-	// 5. Always use user's original coordinates when available
+	// 5. Se encontrou região mas nenhuma equipe atende a categoria → bloquear
+	if regionID != nil && teamID == nil {
+		if urls := services.ParseAttachmentURLs(req.Attachments); len(urls) > 0 {
+			h.uploadService.RollbackFiles(urls)
+		}
+		respondError(w, http.StatusBadRequest, "Nenhuma equipe disponível para atender esta solicitação na região informada.")
+		return
+	}
+
+	// 6. Always use user's original coordinates when available
 	if appLat != nil && appLon != nil {
 		geoLat = appLat
 		geoLon = appLon
@@ -484,10 +502,11 @@ func getNestedFloat(data map[string]interface{}, objKey, fieldKey string) (float
 	return 0, false
 }
 
-// lookupRegionAndTeam tenta encontrar região pelo bairro (exato + case-insensitive como fallback)
-func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro string, currentRegionID, currentTeamID *int64) (*int64, *int64) {
+// lookupRegionAndTeam tenta encontrar região pelo bairro e equipe pela região + categoria.
+// Retorna false se nenhuma equipe atende a categoria do serviço.
+func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro, serviceCategory string, currentRegionID, currentTeamID *int64) (*int64, *int64, bool) {
 	if bairro == "" {
-		return currentRegionID, currentTeamID
+		return currentRegionID, currentTeamID, true
 	}
 
 	region, err := h.regionRepo.FindByNeighborhood(ctx, bairro)
@@ -495,13 +514,19 @@ func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro 
 		region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
 	}
 	if err != nil {
-		return currentRegionID, currentTeamID
+		return currentRegionID, currentTeamID, true
 	}
 
 	regionID := &region.ID
-	team, err := h.teamRepo.GetTeamByRegion(ctx, region.ID)
-	if err != nil {
-		return regionID, currentTeamID
+
+	if serviceCategory != "" {
+		team, err := h.teamRepo.FindTeamByRegionAndCategory(ctx, region.ID, serviceCategory)
+		if err == nil {
+			return regionID, &team.ID, true
+		}
+		// Nenhuma equipe atende esta categoria na região → pedido não pode ser criado
+		return regionID, currentTeamID, false
 	}
-	return regionID, &team.ID
+
+	return regionID, currentTeamID, true
 }

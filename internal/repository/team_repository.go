@@ -138,7 +138,65 @@ func (r *TeamRepository) DeleteTeam(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetTeamByRegion returns the team responsible for a given region.
+// FindTeamsByRegion returns all teams assigned to a region.
+func (r *TeamRepository) FindTeamsByRegion(ctx context.Context, regionID int64) ([]*models.Team, error) {
+	query := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE t.region_id = $1
+		ORDER BY t.name ASC`
+
+	rows, err := r.db.Query(ctx, query, regionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find teams by region: %w", err)
+	}
+	defer rows.Close()
+
+	var teams []*models.Team
+	for rows.Next() {
+		team := &models.Team{}
+		if err := rows.Scan(
+			&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan team: %w", err)
+		}
+		teams = append(teams, team)
+	}
+	if teams == nil {
+		teams = []*models.Team{}
+	}
+	return teams, nil
+}
+
+// FindTeamByRegionAndCategory finds the best team for a region that handles the given service category.
+// Matches by checking which team's secretary has the category in their work_area.
+func (r *TeamRepository) FindTeamByRegionAndCategory(ctx context.Context, regionID int64, serviceCategory string) (*models.Team, error) {
+	catJSON, _ := json.Marshal(serviceCategory)
+	query := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE t.region_id = $1
+		  AND t.id IN (
+			SELECT u.team_id FROM users u
+			WHERE u.team_id IS NOT NULL
+			  AND u.type = 'secretary'
+			  AND u.work_area @> $2::jsonb
+		  )
+		LIMIT 1`
+
+	team := &models.Team{}
+	err := r.db.QueryRow(ctx, query, regionID, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("no team found for region %d and category '%s': %w", regionID, serviceCategory, err)
+	}
+	return team, nil
+}
+
+// GetTeamByRegion returns the first team assigned to a given region (legacy, for single-team-per-region setups).
 func (r *TeamRepository) GetTeamByRegion(ctx context.Context, regionID int64) (*models.Team, error) {
 	query := `
 		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at

@@ -364,6 +364,15 @@ func (r *ServiceRequestRepository) scanServiceRequests(ctx context.Context, quer
 	return list, nil
 }
 
+func (r *ServiceRequestRepository) GetServiceCategory(ctx context.Context, serviceID int64) (string, error) {
+	var category string
+	err := r.db.QueryRow(ctx, `SELECT category FROM services WHERE id = $1 AND is_active = TRUE`, serviceID).Scan(&category)
+	if err != nil {
+		return "", fmt.Errorf("service not found: %w", err)
+	}
+	return category, nil
+}
+
 func (r *ServiceRequestRepository) UpdateServiceRequestStatus(ctx context.Context, id int64, status string) (*models.ServiceRequest, error) {
 	validStatuses := map[string]bool{
 		"pending": true, "in_progress": true, "completed": true, "cancelled": true,
