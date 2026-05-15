@@ -108,6 +108,7 @@ func Setup(
 			// Auth
 			r.Get("/auth/me", userHandler.GetMe)
 			r.Post("/auth/logout", authHandler.Logout)
+			r.Put("/auth/password", authHandler.ChangePassword)
 
 			// Home
 			r.Get("/home", homeHandler.Index)

@@ -77,6 +77,24 @@ type UpdateUserRequest struct {
 	ProfileImageURL *string  `json:"profile_image_url,omitempty"`
 }
 
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+func (r *ChangePasswordRequest) Validate() error {
+	if r.OldPassword == "" {
+		return fmt.Errorf("old_password is required")
+	}
+	if r.NewPassword == "" {
+		return fmt.Errorf("new_password is required")
+	}
+	if len(r.NewPassword) < 6 {
+		return fmt.Errorf("new_password must be at least 6 characters")
+	}
+	return nil
+}
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

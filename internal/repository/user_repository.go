@@ -346,6 +346,27 @@ func (r *UserRepository) UpdateUser(ctx context.Context, id int64, req *models.U
 	return user, nil
 }
 
+func (r *UserRepository) GetUserPasswordHash(ctx context.Context, userID int64) (string, error) {
+	var hash string
+	err := r.db.QueryRow(ctx, `SELECT password FROM users WHERE id = $1`, userID).Scan(&hash)
+	if err != nil {
+		return "", fmt.Errorf("user not found: %w", err)
+	}
+	return hash, nil
+}
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, newHash string) error {
+	query := `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`
+	result, err := r.db.Exec(ctx, query, newHash, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
+}
+
 func (r *UserRepository) DeleteUser(ctx context.Context, id int64) error {
 	query := `DELETE FROM users WHERE id = $1`
 	result, err := r.db.Exec(ctx, query, id)

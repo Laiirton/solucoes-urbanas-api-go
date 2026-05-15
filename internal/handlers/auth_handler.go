@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 	"golang.org/x/crypto/bcrypt"
@@ -51,6 +52,50 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.LoginResponse{Token: token, User: *user})
+}
+
+// PUT /auth/password
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req models.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	currentHash, err := h.userRepo.GetUserPasswordHash(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "user not found")
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
+		respondError(w, http.StatusUnauthorized, "current password is incorrect")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+
+	if err := h.userRepo.UpdatePassword(r.Context(), userID, string(newHash)); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to update password")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "password updated successfully"})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
