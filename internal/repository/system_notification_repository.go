@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -59,6 +60,22 @@ func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, 
 			query += ` WHERE read_at IS NULL`
 			whereApplied = true
 		}
+	}
+
+	// Exclude stale notifications (references to deleted content)
+	staleFilter := `NOT (
+		(type = 'news' AND data IS NOT NULL AND data->>'news_id' IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM news WHERE id::text = data->>'news_id'
+		))
+		OR
+		(type = 'service_request' AND data IS NOT NULL AND data->>'service_request_id' IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM service_requests WHERE id::text = data->>'service_request_id'
+		))
+	)`
+	if whereApplied {
+		query += ` AND ` + staleFilter
+	} else {
+		query += ` WHERE ` + staleFilter
 	}
 
 	query += ` ORDER BY created_at DESC`
@@ -137,6 +154,37 @@ func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64)
 		return nil, fmt.Errorf("failed to mark system notification as read: %w", err)
 	}
 	return &n, nil
+}
+
+func (r *SystemNotificationRepository) DeleteByTypeAndRefID(ctx context.Context, notifType string, refID int64) error {
+	dataKey := "news_id"
+	switch notifType {
+	case "news":
+		dataKey = "news_id"
+	case "service_request":
+		dataKey = "service_request_id"
+	default:
+		return fmt.Errorf("unsupported notification type for cascade delete: %s", notifType)
+	}
+
+	query := fmt.Sprintf(
+		`DELETE FROM system_notifications WHERE type = $1 AND data->>'%s' = $2`,
+		dataKey,
+	)
+	_, err := r.db.Exec(ctx, query, notifType, strconv.FormatInt(refID, 10))
+	if err != nil {
+		return fmt.Errorf("failed to delete system notifications by ref: %w", err)
+	}
+	return nil
+}
+
+func (r *SystemNotificationRepository) MarkAllAsRead(ctx context.Context, userID int64) (int64, error) {
+	query := `UPDATE system_notifications SET read_at = NOW() WHERE (user_id = $1 OR user_id IS NULL) AND read_at IS NULL`
+	result, err := r.db.Exec(ctx, query, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to mark all as read: %w", err)
+	}
+	return result.RowsAffected(), nil
 }
 
 func (r *SystemNotificationRepository) Delete(ctx context.Context, id int64) error {

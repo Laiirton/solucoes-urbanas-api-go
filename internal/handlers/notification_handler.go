@@ -266,6 +266,30 @@ func (h *NotificationHandler) DeleteSystemNotification(w http.ResponseWriter, r 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *NotificationHandler) MarkAllSystemNotificationsAsRead(w http.ResponseWriter, r *http.Request) {
+	if h.sysNotifRepo == nil {
+		respondError(w, http.StatusInternalServerError, "system notification service not configured")
+		return
+	}
+
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	count, err := h.sysNotifRepo.MarkAllAsRead(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "all notifications marked as read",
+		"count":   count,
+	})
+}
+
 func hasSystemNotificationUpdateFields(req *models.UpdateSystemNotificationRequest) bool {
 	return req.Title != nil ||
 		req.Body != nil ||

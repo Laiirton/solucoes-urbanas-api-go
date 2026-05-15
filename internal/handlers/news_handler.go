@@ -265,6 +265,13 @@ func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cascade delete related system notifications
+	if h.sysNotifRepo != nil {
+		if err := h.sysNotifRepo.DeleteByTypeAndRefID(r.Context(), "news", id); err != nil {
+			log.Printf("warning: failed to delete system notifications for news %d: %v", id, err)
+		}
+	}
+
 	if h.storage != nil {
 		urls := extractSupabaseURLs(n.Content, n.ImageURLs)
 		for _, u := range urls {

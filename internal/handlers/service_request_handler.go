@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -248,6 +249,13 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 	if err := h.srRepo.DeleteServiceRequest(r.Context(), id); err != nil {
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
+	}
+
+	// Cascade delete related system notifications
+	if h.sysNotifRepo != nil {
+		if err := h.sysNotifRepo.DeleteByTypeAndRefID(r.Context(), "service_request", id); err != nil {
+			log.Printf("warning: failed to delete system notifications for SR %d: %v", id, err)
+		}
 	}
 
 	if urls := services.ParseAttachmentURLs(sr.Attachments); len(urls) > 0 {

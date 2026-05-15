@@ -147,6 +147,7 @@ func Setup(
 			r.Get("/notifications/{id}", notificationHandler.GetSystemNotification)
 			r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
 			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
+			r.Patch("/notifications/read-all", notificationHandler.MarkAllSystemNotificationsAsRead)
 			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
 
 			// News write — Admin OR Marketing
