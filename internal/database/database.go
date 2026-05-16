@@ -43,8 +43,22 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
-	if err := pool.Ping(context.Background()); err != nil {
-		return nil, fmt.Errorf("unable to ping database: %w", err)
+	// Retry ping with backoff — necessário durante deploys no Render onde
+	// a instância antiga ainda está rodando e consumindo conexões do pooler
+	var pingErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		pingErr = pool.Ping(ctx)
+		cancel()
+		if pingErr == nil {
+			break
+		}
+		log.Printf("Database ping attempt %d/5 failed: %v", attempt+1, pingErr)
+		time.Sleep(time.Duration(3+attempt*2) * time.Second)
+	}
+	if pingErr != nil {
+		pool.Close()
+		return nil, fmt.Errorf("unable to ping database after 5 retries: %w", pingErr)
 	}
 
 	log.Printf("Database connection pool configured: min=%d, max=%d, max_lifetime=%v", 
