@@ -138,7 +138,7 @@ func (r *ServiceRequestRepository) GetServiceRequestByID(ctx context.Context, id
 	return sr, nil
 }
 
-func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status string, regionFilter, teamFilter *int64, startDate, endDate *string, page, limit int) ([]*models.ServiceRequest, error) {
+func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, search, status, category string, regionFilter, teamFilter *int64, startDate, endDate *string, page, limit int) ([]*models.ServiceRequest, error) {
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -166,6 +166,16 @@ func (r *ServiceRequestRepository) ListServiceRequests(ctx context.Context, sear
 			query += ` WHERE sr.status = $1`
 		}
 		args = append(args, status)
+		whereApplied = true
+	}
+
+	if category != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND sr.category = $%d`, len(args)+1)
+		} else {
+			query += ` WHERE sr.category = $1`
+		}
+		args = append(args, category)
 		whereApplied = true
 	}
 

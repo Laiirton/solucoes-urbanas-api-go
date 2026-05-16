@@ -19,6 +19,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 
 	search := r.URL.Query().Get("search")
 	status := r.URL.Query().Get("status")
+	category := r.URL.Query().Get("category")
 	page, limit := parsePagination(r)
 
 	user, err := h.userRepo.GetUserByID(r.Context(), userID)
@@ -36,7 +37,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	if teamFilter != nil && userRole != nil && (*userRole == "attendant" || *userRole == "secretary") {
 		list, err = h.srRepo.ListServiceRequestsByTeam(r.Context(), *teamFilter, search, status, page, limit)
 	} else if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, regionFilter, teamFilter, nil, nil, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, category, regionFilter, teamFilter, nil, nil, page, limit)
 	} else {
 		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, regionFilter, page, limit)
 	}
@@ -107,7 +108,7 @@ func (h *ServiceRequestHandler) GeocodeAllServiceRequests(w http.ResponseWriter,
 
 	var list []*models.ServiceRequest
 	if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", regionFilter, teamFilter, nil, nil, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, "", "", regionFilter, teamFilter, nil, nil, page, limit)
 	} else {
 		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, "", regionFilter, page, limit)
 	}
