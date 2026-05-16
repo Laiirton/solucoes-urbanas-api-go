@@ -513,3 +513,30 @@ func (r *TeamRepository) getTeamsWorkAreas(ctx context.Context, teamIDs []int64)
 	}
 	return areasMap, nil
 }
+
+// FindCityWideTeamByCategory finds a team with no specific region (region_id IS NULL)
+// whose secretary handles the given service category. Used as fallback for small towns.
+func (r *TeamRepository) FindCityWideTeamByCategory(ctx context.Context, serviceCategory string) (*models.Team, error) {
+	catJSON, _ := json.Marshal(serviceCategory)
+	query := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE t.region_id IS NULL
+		  AND t.id IN (
+			SELECT u.team_id FROM users u
+			WHERE u.team_id IS NOT NULL
+			  AND u.type = 'secretary'
+			  AND u.work_area::jsonb @> $1::jsonb
+		  )
+		LIMIT 1`
+
+	team := &models.Team{}
+	err := r.db.QueryRow(ctx, query, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("no city-wide team found for category '%s': %w", serviceCategory, err)
+	}
+	return team, nil
+}

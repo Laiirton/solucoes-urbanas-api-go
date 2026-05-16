@@ -595,32 +595,41 @@ func getNestedFloat(data map[string]interface{}, objKey, fieldKey string) (float
 // lookupRegionAndTeam tenta encontrar região pelo bairro e equipe pela região + categoria.
 // Retorna false se nenhuma equipe atende a categoria do serviço.
 func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro, serviceCategory string, currentRegionID, currentTeamID *int64) (*int64, *int64, bool) {
+	// Step 1: Try to find region by neighborhood name
+	if bairro != "" {
+		region, err := h.regionRepo.FindByNeighborhood(ctx, bairro)
+		if err != nil {
+			region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
+		}
+		if err != nil {
+			region = findRegionByCityName(ctx, h.regionRepo, bairro)
+		}
+		if region != nil {
+			regionID := &region.ID
+			// Try to find a team for this region + category
+			if serviceCategory != "" {
+				team, err := h.teamRepo.FindTeamByRegionAndCategory(ctx, region.ID, serviceCategory)
+				if err == nil {
+					return regionID, &team.ID, true
+				}
+				return regionID, currentTeamID, false
+			}
+			return regionID, currentTeamID, true
+		}
+	}
+
+	// Step 2: City-wide fallback — try to find ANY team whose secretary handles this category,
+	// regardless of region (region_id IS NULL)
+	if serviceCategory != "" {
+		team, err := h.teamRepo.FindCityWideTeamByCategory(ctx, serviceCategory)
+		if err == nil {
+			return nil, &team.ID, true
+		}
+	}
+
+	// Step 3: No region and no city-wide team found
 	if bairro == "" {
 		return currentRegionID, currentTeamID, true
 	}
-
-	region, err := h.regionRepo.FindByNeighborhood(ctx, bairro)
-	if err != nil {
-		region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
-	}
-	if err != nil {
-		// Fallback: try finding region by city name or common neighborhood names
-		region = findRegionByCityName(ctx, h.regionRepo, bairro)
-	}
-	if region == nil {
-		return currentRegionID, currentTeamID, true
-	}
-
-	regionID := &region.ID
-
-	if serviceCategory != "" {
-		team, err := h.teamRepo.FindTeamByRegionAndCategory(ctx, region.ID, serviceCategory)
-		if err == nil {
-			return regionID, &team.ID, true
-		}
-		// Nenhuma equipe atende esta categoria na região → pedido não pode ser criado
-		return regionID, currentTeamID, false
-	}
-
-	return regionID, currentTeamID, true
+	return currentRegionID, currentTeamID, false
 }
