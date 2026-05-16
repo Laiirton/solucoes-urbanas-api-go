@@ -21,6 +21,15 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	status := r.URL.Query().Get("status")
 	category := r.URL.Query().Get("category")
 	page, limit := parsePagination(r)
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	var startDatePtr, endDatePtr *string
+	if startDate != "" {
+		startDatePtr = &startDate
+	}
+	if endDate != "" {
+		endDatePtr = &endDate
+	}
 
 	user, err := h.userRepo.GetUserByID(r.Context(), userID)
 	if err != nil {
@@ -37,7 +46,7 @@ func (h *ServiceRequestHandler) ListServiceRequests(w http.ResponseWriter, r *ht
 	if teamFilter != nil && userRole != nil && (*userRole == "attendant" || *userRole == "secretary") {
 		list, err = h.srRepo.ListServiceRequestsByTeam(r.Context(), *teamFilter, search, status, page, limit)
 	} else if r.URL.Query().Get("all") == "true" {
-		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, category, regionFilter, teamFilter, nil, nil, page, limit)
+		list, err = h.srRepo.ListServiceRequests(r.Context(), search, status, category, regionFilter, teamFilter, startDatePtr, endDatePtr, page, limit)
 	} else {
 		list, err = h.srRepo.ListServiceRequestsByUser(r.Context(), userID, search, status, regionFilter, page, limit)
 	}
