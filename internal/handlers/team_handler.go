@@ -266,6 +266,13 @@ func (h *TeamHandler) GetTeamDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check authorization: admin or secretary of the team
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+		respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
+		return
+	}
+
 	stats, err := h.teamRepo.GetTeamStats(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "team not found")

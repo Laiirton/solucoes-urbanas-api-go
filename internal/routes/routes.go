@@ -120,6 +120,7 @@ func Setup(
 			r.Get("/teams/{id}/members", teamHandler.ListTeamMembers)
 			r.Post("/teams/{id}/members", teamHandler.AddTeamMember)
 			r.Delete("/teams/{id}/members/{userId}", teamHandler.RemoveTeamMember)
+			r.Get("/teams/{id}/stats", teamHandler.GetTeamDashboard)
 
 			// Service Requests — all authenticated users can create and view
 			r.Post("/service-requests", srHandler.CreateServiceRequest)
@@ -196,7 +197,6 @@ func Setup(
 				r.Get("/teams/{id}", teamHandler.GetTeam)
 				r.Put("/teams/{id}", teamHandler.UpdateTeam)
 				r.Delete("/teams/{id}", teamHandler.DeleteTeam)
-				r.Get("/teams/{id}/stats", teamHandler.GetTeamDashboard)
 
 				// Services (write)
 				r.Post("/services", serviceHandler.CreateService)
