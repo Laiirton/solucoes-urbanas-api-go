@@ -382,6 +382,9 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 				} else if end, ok := data["endereco"].(string); ok {
 					req.Address = &end
 				}
+				if bairro, ok := data["endereco_bairro"].(string); ok {
+					req.Bairro = bairro
+				}
 			}
 			list = append(list, req)
 		}

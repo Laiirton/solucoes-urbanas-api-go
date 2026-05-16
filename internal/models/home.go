@@ -42,6 +42,7 @@ type RecentRequest struct {
 	Name    *string `json:"name"`
 	Service string  `json:"service"`
 	Address *string `json:"address"`
+	Bairro  string  `json:"bairro"`
 	Status  string  `json:"status"`
 	Date    string  `json:"date"`
 }
