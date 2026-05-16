@@ -604,6 +604,10 @@ func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro,
 		region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
 	}
 	if err != nil {
+		// Fallback: try finding region by city name or common neighborhood names
+		region = findRegionByCityName(ctx, h.regionRepo, bairro)
+	}
+	if region == nil {
 		return currentRegionID, currentTeamID, true
 	}
 
