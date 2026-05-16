@@ -32,7 +32,7 @@ func (r *NewsRepository) CreateNews(ctx context.Context, n *models.News) (*model
 	return n, nil
 }
 
-func (r *NewsRepository) ListNews(ctx context.Context, search string, status string, page, limit int) ([]*models.News, error) {
+func (r *NewsRepository) ListNews(ctx context.Context, search string, status string, page, limit int, startDate, endDate *string) ([]*models.News, error) {
 	query := `SELECT id, title, slug, summary, content, image_urls, status, category, tags, author_id, published_at, created_at, updated_at FROM news`
 
 	var args []interface{}
@@ -49,6 +49,24 @@ func (r *NewsRepository) ListNews(ctx context.Context, search string, status str
 			where += " AND status = $2"
 		}
 		args = append(args, status)
+	}
+
+	if startDate != nil && *startDate != "" {
+		if where == "" {
+			where = fmt.Sprintf(` WHERE created_at >= $1::date`)
+		} else {
+			where += fmt.Sprintf(` AND created_at >= $%d::date`, len(args)+1)
+		}
+		args = append(args, *startDate)
+	}
+
+	if endDate != nil && *endDate != "" {
+		if where == "" {
+			where = fmt.Sprintf(` WHERE created_at <= ($1::date + interval '1 day')`)
+		} else {
+			where += fmt.Sprintf(` AND created_at <= ($%d::date + interval '1 day')`, len(args)+1)
+		}
+		args = append(args, *endDate)
 	}
 
 	query += where

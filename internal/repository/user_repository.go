@@ -181,7 +181,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	return user, nil
 }
 
-func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, teamID *int64, page, limit int) ([]*models.User, error) {
+func (r *UserRepository) ListUsers(ctx context.Context, search, userType string, teamID *int64, page, limit int, startDate, endDate *string) ([]*models.User, error) {
 	query := `SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
 		 t.id, t.name, t.description, t.region_id, COALESCE(rg.name, ''), t.created_at, t.updated_at
  FROM users u
@@ -215,6 +215,26 @@ func (r *UserRepository) ListUsers(ctx context.Context, search, userType string,
 			whereApplied = true
 		}
 		args = append(args, *teamID)
+	}
+
+	if startDate != nil && *startDate != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND u.created_at >= $%d::date`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE u.created_at >= $1::date`)
+			whereApplied = true
+		}
+		args = append(args, *startDate)
+	}
+
+	if endDate != nil && *endDate != "" {
+		if whereApplied {
+			query += fmt.Sprintf(` AND u.created_at <= ($%d::date + interval '1 day')`, len(args)+1)
+		} else {
+			query += fmt.Sprintf(` WHERE u.created_at <= ($1::date + interval '1 day')`)
+			whereApplied = true
+		}
+		args = append(args, *endDate)
 	}
 
 	query += ` ORDER BY u.id ASC`

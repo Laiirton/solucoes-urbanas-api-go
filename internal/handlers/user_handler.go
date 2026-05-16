@@ -35,6 +35,11 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	userType := r.URL.Query().Get("type")
 	teamNull := r.URL.Query().Get("team_null") == "true"
 	page, limit := parsePagination(r)
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	var startDatePtr, endDatePtr *string
+	if startDate != "" { startDatePtr = &startDate }
+	if endDate != "" { endDatePtr = &endDate }
 
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if !ok {
@@ -57,7 +62,7 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	users, err := h.userRepo.ListUsers(r.Context(), search, userType, teamFilter, page, limit)
+	users, err := h.userRepo.ListUsers(r.Context(), search, userType, teamFilter, page, limit, startDatePtr, endDatePtr)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list users")
 		return

@@ -146,8 +146,13 @@ func (h *NewsHandler) ListNews(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	status := r.URL.Query().Get("status")
 	page, limit := parsePagination(r)
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	var startDatePtr, endDatePtr *string
+	if startDate != "" { startDatePtr = &startDate }
+	if endDate != "" { endDatePtr = &endDate }
 
-	newsList, err := h.repo.ListNews(r.Context(), search, status, page, limit)
+	newsList, err := h.repo.ListNews(r.Context(), search, status, page, limit, startDatePtr, endDatePtr)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list news")
 		return
