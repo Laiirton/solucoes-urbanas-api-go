@@ -82,6 +82,21 @@ func CanManageTeam(ctx context.Context, userRepo *repository.UserRepository, use
 	return false
 }
 
+// CanViewRequest checks if the user can view the service request.
+// Returns true if the user owns the request OR can manage it (admin/secretary/attendant of the team).
+func CanViewRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
+	// Check if user owns the request first (citizen case)
+	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
+	if err != nil {
+		return false
+	}
+	if sr.UserID != nil && *sr.UserID == userID {
+		return true
+	}
+	// Then check if user can manage (admin/secretary/attendant of the team)
+	return CanManageRequest(ctx, userRepo, srRepo, userID, requestID)
+}
+
 // CanManageRequest checks if the user can manage the given service request.
 func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
 	user, err := userRepo.GetUserByID(ctx, userID)

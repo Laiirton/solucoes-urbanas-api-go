@@ -122,6 +122,23 @@ func (h *ServiceAttendanceHandler) ListAttendances(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Verify permission: user must be the owner OR be able to manage the request
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		// Check if user owns the request
+		sr, err := h.srRepo.GetServiceRequestByID(r.Context(), requestID)
+		if err != nil {
+			respondError(w, http.StatusNotFound, "service request not found")
+			return
+		}
+		ownsRequest := sr.UserID != nil && *sr.UserID == userID
+		canManage := CanManageRequest(r.Context(), h.userRepo, h.srRepo, userID, requestID)
+		if !ownsRequest && !canManage {
+			respondError(w, http.StatusNotFound, "service request not found")
+			return
+		}
+	}
+
 	list, err := h.repo.ListByRequestID(r.Context(), requestID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list attendances")

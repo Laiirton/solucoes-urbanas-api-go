@@ -218,9 +218,9 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Team ownership check for secretary/attendant
+	// Permission check: user must own the request OR be admin/secretary/attendant of the team
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if ok && !CanManageRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
+	if ok && !CanViewRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
@@ -339,6 +339,60 @@ func (h *ServiceRequestHandler) UpdateServiceRequest(w http.ResponseWriter, r *h
 	}
 
 	sr, err := h.srRepo.UpdateServiceRequest(r.Context(), id, &req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, sr)
+}
+
+// PATCH /service-requests/{id}/notes
+func (h *ServiceRequestHandler) UpdateServiceRequestNotes(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid service request id")
+		return
+	}
+
+	// Permission check: must be able to manage the request
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok && !CanManageRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Store notes in request_data as observacoes_internas
+	existing, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
+	var requestData map[string]interface{}
+	if existing.RequestData != nil {
+		json.Unmarshal(existing.RequestData, &requestData)
+	}
+	if requestData == nil {
+		requestData = make(map[string]interface{})
+	}
+	requestData["observacoes_internas"] = req.Notes
+
+	updatedData, _ := json.Marshal(requestData)
+
+	updateReq := &models.CreateServiceRequestRequest{
+		RequestData: updatedData,
+	}
+
+	sr, err := h.srRepo.UpdateServiceRequest(r.Context(), id, updateReq)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -129,6 +129,7 @@ func Setup(
 				r.Get("/", srHandler.GetServiceRequest)
 				r.Put("/", srHandler.UpdateServiceRequest)
 				r.Patch("/status", srHandler.UpdateServiceRequestStatus)
+				r.Patch("/notes", srHandler.UpdateServiceRequestNotes)
 				r.Delete("/", srHandler.DeleteServiceRequest)
 
 				// Attendance (Handling)
@@ -146,15 +147,20 @@ func Setup(
 			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)
 			r.Get("/geocode-service-requests/{id}", srHandler.GeocodeServiceRequest)
 
-			// Notifications
+			// Notifications — read and push-token available to any authenticated user
 			r.Post("/notifications/push-tokens", notificationHandler.RegisterPushToken)
 			r.Get("/notifications", notificationHandler.ListSystemNotifications)
-			r.Post("/notifications", notificationHandler.CreateSystemNotification)
 			r.Get("/notifications/{id}", notificationHandler.GetSystemNotification)
-			r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
 			r.Patch("/notifications/{id}/read", notificationHandler.MarkSystemNotificationAsRead)
 			r.Patch("/notifications/read-all", notificationHandler.MarkAllSystemNotificationsAsRead)
-			r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
+
+			// Notifications write — admin only
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole(userRepo, "admin"))
+				r.Post("/notifications", notificationHandler.CreateSystemNotification)
+				r.Put("/notifications/{id}", notificationHandler.UpdateSystemNotification)
+				r.Delete("/notifications/{id}", notificationHandler.DeleteSystemNotification)
+			})
 
 			// News write — Admin OR Marketing
 			r.Group(func(r chi.Router) {
