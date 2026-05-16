@@ -62,6 +62,14 @@ func (h *TeamHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If secretary_id is provided, add the secretary to the team
+	if req.SecretaryID != nil && *req.SecretaryID > 0 {
+		if addErr := h.teamRepo.AddMember(r.Context(), team.ID, *req.SecretaryID); addErr == nil {
+			// Sync team categories from the secretary's work_area
+			h.teamRepo.SyncTeamCategories(r.Context(), team.ID)
+		}
+	}
+
 	respondJSON(w, http.StatusCreated, team)
 }
 

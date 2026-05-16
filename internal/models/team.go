@@ -21,6 +21,7 @@ type CreateTeamRequest struct {
 	Description *string  `json:"description,omitempty"`
 	Categories  []string `json:"categories,omitempty"`
 	CityWide    bool     `json:"city_wide"`
+	SecretaryID *int64   `json:"secretary_id,omitempty"`
 }
 
 type UpdateTeamRequest struct {

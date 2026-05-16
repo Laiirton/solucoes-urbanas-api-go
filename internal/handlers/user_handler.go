@@ -33,6 +33,7 @@ func NewUserHandler(userRepo *repository.UserRepository, srRepo *repository.Serv
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	userType := r.URL.Query().Get("type")
+	teamNull := r.URL.Query().Get("team_null") == "true"
 	page, limit := parsePagination(r)
 
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
@@ -60,6 +61,17 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list users")
 		return
+	}
+
+	// Filter to show only users without a team (team_null=true)
+	if teamNull && users != nil {
+		filtered := []*models.User{}
+		for _, u := range users {
+			if u.TeamID == nil {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
 	}
 	if users == nil {
 		users = []*models.User{}
