@@ -178,6 +178,13 @@ func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check authorization: admin or secretary of the team
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+		respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
+		return
+	}
+
 	members, err := h.teamRepo.ListMembers(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list team members")

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 )
@@ -16,6 +17,7 @@ type CategoryHandler struct {
 	srRepo      *repository.ServiceRequestRepository
 	teamRepo    *repository.TeamRepository
 	ratingRepo  *repository.ServiceRatingRepository
+	userRepo    *repository.UserRepository
 }
 
 func NewCategoryHandler(
@@ -24,6 +26,7 @@ func NewCategoryHandler(
 	srRepo *repository.ServiceRequestRepository,
 	teamRepo *repository.TeamRepository,
 	ratingRepo *repository.ServiceRatingRepository,
+	userRepo *repository.UserRepository,
 ) *CategoryHandler {
 	return &CategoryHandler{
 		repo:        repo,
@@ -31,6 +34,7 @@ func NewCategoryHandler(
 		srRepo:      srRepo,
 		teamRepo:    teamRepo,
 		ratingRepo:  ratingRepo,
+		userRepo:    userRepo,
 	}
 }
 
@@ -82,6 +86,16 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Get team filter for secretary/attendant
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	var teamFilter *int64
+	if ok {
+		user, err := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if err == nil {
+			teamFilter = GetTeamFilterForUserForUser(user)
+		}
+	}
+
 	// 1. Get Category
 	cat, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
@@ -97,7 +111,7 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	// 3. Get Requests
-	requests, err := h.srRepo.ListServiceRequestsByCategory(r.Context(), cat.Name, 0)
+	requests, err := h.srRepo.ListServiceRequestsByCategory(r.Context(), cat.Name, teamFilter, 0)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list category requests")
 		return

@@ -61,7 +61,7 @@ func Setup(
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
-	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo, srRepo, teamRepo, ratingRepo)
+	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo, srRepo, teamRepo, ratingRepo, userRepo)
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
@@ -138,6 +138,9 @@ func Setup(
 			// Service Ratings
 			r.Post("/ratings", ratingHandler.CreateRating)
 
+			// Category Dashboard (admin OR secretary)
+			r.Get("/categories/{id}/dashboard", categoryHandler.GetCategoryDetails)
+
 			// Geocoding
 			r.Get("/geocode-service-requests", srHandler.GeocodeAllServiceRequests)
 			r.Get("/geocode-service-requests/{id}", srHandler.GeocodeServiceRequest)
@@ -208,11 +211,10 @@ func Setup(
 				r.Put("/app/banners/{id}", appConfigHandler.UpdateBanner)
 				r.Delete("/app/banners/{id}", appConfigHandler.DeleteBanner)
 
-				// Categories
+				// Categories (read-only dashboard for secretary too)
 				r.Post("/categories", categoryHandler.CreateCategory)
 				r.Put("/categories/{id}", categoryHandler.UpdateCategory)
 				r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
-				r.Get("/categories/{id}/dashboard", categoryHandler.GetCategoryDetails)
 			})
 		})
 	})

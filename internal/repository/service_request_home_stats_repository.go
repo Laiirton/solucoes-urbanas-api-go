@@ -54,12 +54,13 @@ func buildBaseWhere(isAdmin bool, userID int64, regionFilter, teamFilter *int64,
 	baseWhere := ""
 	var args []interface{}
 
-	if !isAdmin {
-		baseWhere = "WHERE sr.user_id = $1"
-		args = append(args, userID)
-	} else if teamFilter != nil {
+	// teamFilter vem primeiro: secretário/atendente veem apenas dados do time
+	if teamFilter != nil {
 		baseWhere = "WHERE sr.team_id = $1"
 		args = append(args, *teamFilter)
+	} else if !isAdmin {
+		baseWhere = "WHERE sr.user_id = $1"
+		args = append(args, userID)
 	} else if regionFilter != nil {
 		baseWhere = "WHERE sr.region_id = $1"
 		args = append(args, *regionFilter)

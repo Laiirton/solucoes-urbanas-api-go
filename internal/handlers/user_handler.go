@@ -162,6 +162,19 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Secretário só pode ver usuários do próprio time
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		currentUser, err := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if err == nil && currentUser.Type != nil && *currentUser.Type == "secretary" {
+			targetUser, err := h.userRepo.GetUserByID(r.Context(), id)
+			if err != nil || targetUser.TeamID == nil || currentUser.TeamID == nil || *targetUser.TeamID != *currentUser.TeamID {
+				respondError(w, http.StatusNotFound, "user not found")
+				return
+			}
+		}
+	}
+
 	user, err := h.userRepo.GetUserByID(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "user not found")
