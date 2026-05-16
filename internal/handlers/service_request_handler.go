@@ -136,36 +136,47 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 		}
 	}
 
-	// 1. Extract bairro and coordinates from app's request_data (user map selection)
-	appBairro := extractBairroFromRequestData(req.RequestData)
-	appLat, appLon := extractCoordinatesFromRequestData(req.RequestData)
-	appAddress := extractAddressFromRequestData(req.RequestData)
+// 0.5 Team override: attendant/secretary always create for their own team
+	var appBairro string
+	var appLat, appLon *float64
+	var appAddress string
 
-	// 2. Use app's bairro as primary source (most reliable, zero external API)
-	if appBairro != "" {
-		regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), appBairro, serviceCategory, regionID, teamID)
-	}
+	currentUserForTeam, _ := h.userRepo.GetUserByID(r.Context(), userID)
+	if currentUserForTeam != nil && currentUserForTeam.TeamID != nil &&
+		(currentUserForTeam.Type != nil && (*currentUserForTeam.Type == "attendant" || *currentUserForTeam.Type == "secretary")) {
+		teamID = currentUserForTeam.TeamID
+		teamForRegion, regionErr := h.teamRepo.GetTeamByID(r.Context(), *teamID)
+		if regionErr == nil && teamForRegion.RegionID != nil {
+			regionID = teamForRegion.RegionID
+		}
+	} else {
+		appBairro = extractBairroFromRequestData(req.RequestData)
+		appLat, appLon = extractCoordinatesFromRequestData(req.RequestData)
+		appAddress = extractAddressFromRequestData(req.RequestData)
 
-	// 3. If no bairro from app, try reverse geocode from coordinates
-	if regionID == nil && appLat != nil && appLon != nil {
-		geoResult, err := h.geoService.ReverseGeocode(*appLat, *appLon)
-		if err == nil && geoResult.Found {
-			geoAddress = &geoResult.DisplayName
-			if geoResult.Bairro != "" {
-				regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
+		if appBairro != "" {
+			regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), appBairro, serviceCategory, regionID, teamID)
+		}
+
+		if regionID == nil && appLat != nil && appLon != nil {
+			geoResult, err := h.geoService.ReverseGeocode(*appLat, *appLon)
+			if err == nil && geoResult.Found {
+				geoAddress = &geoResult.DisplayName
+				if geoResult.Bairro != "" {
+					regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
+				}
 			}
 		}
-	}
 
-	// 4. Fallback: forward geocode from address text
-	if regionID == nil && appAddress != "" {
-		geoResult, err := h.geoService.GeocodeAddress(appAddress)
-		if err == nil && geoResult.Found {
-			if geoAddress == nil {
-				geoAddress = &geoResult.DisplayName
-			}
-			if geoResult.Bairro != "" {
-				regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
+		if regionID == nil && appAddress != "" {
+			geoResult, err := h.geoService.GeocodeAddress(appAddress)
+			if err == nil && geoResult.Found {
+				if geoAddress == nil {
+					geoAddress = &geoResult.DisplayName
+				}
+				if geoResult.Bairro != "" {
+					regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), geoResult.Bairro, serviceCategory, regionID, teamID)
+				}
 			}
 		}
 	}
