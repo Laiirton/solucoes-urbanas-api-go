@@ -6,24 +6,32 @@ type StatDetail struct {
 }
 
 type HomeStats struct {
-	TotalRequests       StatDetail       `json:"total_requests"`
-	PendingRequests     StatDetail       `json:"pending_requests"`
-	InProgressRequests  StatDetail       `json:"in_progress_requests"`
-	CompletedRequests   StatDetail       `json:"completed_requests"`
-	CancelledRequests   StatDetail       `json:"cancelled_requests"`
-	UrgentRequests      StatDetail       `json:"urgent_requests"`
-	UnresolvedRequests  StatDetail       `json:"unresolved_requests"`
-	TotalUsers          int              `json:"total_users"`
-	TotalActiveServices int              `json:"total_active_services"`
-	CompletedToday      int              `json:"completed_today"`
-	CreatedToday        int              `json:"created_today"`
-	AverageTime         float64          `json:"average_time"` // in days
-	PopularServices     []PopularService `json:"popular_services"`
+	TotalRequests       StatDetail        `json:"total_requests"`
+	PendingRequests     StatDetail        `json:"pending_requests"`
+	InProgressRequests  StatDetail        `json:"in_progress_requests"`
+	CompletedRequests   StatDetail        `json:"completed_requests"`
+	CancelledRequests   StatDetail        `json:"cancelled_requests"`
+	UrgentRequests      StatDetail        `json:"urgent_requests"`
+	UnresolvedRequests  StatDetail        `json:"unresolved_requests"`
+	TotalUsers          int               `json:"total_users"`
+	TotalActiveServices int               `json:"total_active_services"`
+	CompletedToday      int               `json:"completed_today"`
+	CreatedToday        int               `json:"created_today"`
+	AverageTime         float64           `json:"average_time"`
+	PopularServices     []PopularService   `json:"popular_services"`
+	TeamPerformance     []TeamPerformance `json:"team_performance"`
 }
 
 type HomeAlert struct {
-	Type    string `json:"type"` // e.g., "danger", "warning", "info"
+	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+type TeamPerformance struct {
+	TeamID      int64   `json:"team_id"`
+	TeamName    string  `json:"team_name"`
+	AverageRate float64 `json:"average_rate"`
+	TotalRate   int     `json:"total_rate"`
 }
 
 type CategoryStat struct {

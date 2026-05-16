@@ -32,13 +32,17 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 
 	popularServices := r.computePopularServices(ctx, baseWhere, args)
 	topRatedServices := r.computeTopRatedServices(ctx, baseWhere, args)
+	teamPerf := r.computeTeamPerformance(ctx)
 	alerts := r.computeAlerts(ctx, baseWhere, args)
 	categories := r.computeCategories(ctx, baseWhere, args, total)
 	recent, delayed, newReqs := r.computeRecentRequests(ctx, baseWhere, args)
 	volume7d := r.computeVolume7d(ctx, baseWhere, args)
 
+	stats.PopularServices = popularServices
+	stats.TeamPerformance = teamPerf
+
 	return &models.HomeResponse{
-		Stats:            *stats,
+		Stats: *stats,
 		Categories:       categories,
 		RecentRequests:   recent,
 		DelayedRequests:  delayed,
@@ -240,6 +244,37 @@ func (r *ServiceRequestRepository) computeTopRatedServices(ctx context.Context, 
 	}
 	if result == nil {
 		result = []models.TopRatedService{}
+	}
+	return result
+}
+
+// computeTeamPerformance returns average rating per team based on citizen evaluations.
+func (r *ServiceRequestRepository) computeTeamPerformance(ctx context.Context) []models.TeamPerformance {
+	query := `
+		SELECT t.id, COALESCE(t.name, ''), 
+		       COALESCE(ROUND(AVG(sr.stars)::numeric, 1), 0)::float8,
+		       COUNT(sr.id)
+		FROM teams t
+		LEFT JOIN service_requests srq ON srq.team_id = t.id
+		LEFT JOIN service_ratings sr ON sr.service_request_id = srq.id
+		GROUP BY t.id, t.name
+		ORDER BY AVG(sr.stars) DESC NULLS LAST`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var result []models.TeamPerformance
+	for rows.Next() {
+		var tp models.TeamPerformance
+		if err := rows.Scan(&tp.TeamID, &tp.TeamName, &tp.AverageRate, &tp.TotalRate); err == nil {
+			result = append(result, tp)
+		}
+	}
+	if result == nil {
+		result = []models.TeamPerformance{}
 	}
 	return result
 }
