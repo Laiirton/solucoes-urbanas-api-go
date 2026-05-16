@@ -178,9 +178,20 @@ func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authorization: admin or secretary of the team
+	// Check authorization: admin, secretary, or team attendant
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+	if ok {
+		user, userErr := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if userErr == nil && user.Type != nil && *user.Type == "attendant" {
+			if user.TeamID == nil || *user.TeamID != id {
+				respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
+				return
+			}
+		} else if !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+			respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
+			return
+		}
+	} else {
 		respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
 		return
 	}
@@ -266,9 +277,20 @@ func (h *TeamHandler) GetTeamDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authorization: admin or secretary of the team
+	// Check authorization: admin, secretary, or team attendant
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+	if ok {
+		user, userErr := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if userErr == nil && user.Type != nil && *user.Type == "attendant" {
+			if user.TeamID == nil || *user.TeamID != id {
+				respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
+				return
+			}
+		} else if !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+			respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
+			return
+		}
+	} else {
 		respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
 		return
 	}
