@@ -27,11 +27,12 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("unable to parse database config: %w", err)
 	}
 
-	// Connection pool optimization — Supabase pooler limita a 15 conexões
-	config.MaxConns = 10                              // Max connections (abaixo do limite de 15 do pooler)
-	config.MinConns = 2                              // Min idle connections
-	config.MaxConnLifetime = time.Hour               // Max lifetime of a connection
-	config.MaxConnIdleTime = 15 * time.Minute        // Max idle time before closing
+	// Connection pool optimization — Supabase pooler limita a 15 conexões (session mode)
+	// Valores baixos propositalmente: durante deploy, instância antiga + nova coexistem
+	config.MaxConns = 3                               // Max connections (~10-15% do limite do pooler)
+	config.MinConns = 1                              // Min idle connections
+	config.MaxConnLifetime = 30 * time.Minute        // Max lifetime of a connection (menor = mais rotatividade)
+	config.MaxConnIdleTime = 5 * time.Minute         // Max idle time before closing
 	config.HealthCheckPeriod = 5 * time.Minute       // Period between health checks
 
 	// Statement cache for better performance
