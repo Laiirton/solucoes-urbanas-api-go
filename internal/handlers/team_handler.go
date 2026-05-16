@@ -270,6 +270,14 @@ func (h *TeamHandler) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if removed user was a secretary → sync team categories
+	if h.userRepo != nil {
+		removedUser, _ := h.userRepo.GetUserByID(r.Context(), userID)
+		if removedUser != nil && removedUser.Type != nil && *removedUser.Type == "secretary" {
+			h.teamRepo.SyncTeamCategories(r.Context(), teamID)
+		}
+	}
+
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "member removed successfully"})
 }
 

@@ -21,11 +21,12 @@ import (
 type UserHandler struct {
 	userRepo *repository.UserRepository
 	srRepo   *repository.ServiceRequestRepository
+	teamRepo *repository.TeamRepository
 	storage  services.StorageService
 }
 
-func NewUserHandler(userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, storage services.StorageService) *UserHandler {
-	return &UserHandler{userRepo: userRepo, srRepo: srRepo, storage: storage}
+func NewUserHandler(userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, teamRepo *repository.TeamRepository, storage services.StorageService) *UserHandler {
+	return &UserHandler{userRepo: userRepo, srRepo: srRepo, teamRepo: teamRepo, storage: storage}
 }
 
 // GET /users
@@ -151,6 +152,11 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync team categories if creating a secretary with a team
+	if user.Type != nil && *user.Type == "secretary" && user.TeamID != nil && h.teamRepo != nil {
+		h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
+	}
+
 	respondJSON(w, http.StatusCreated, user)
 }
 
@@ -255,10 +261,25 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get old user data before update (for sync)
+	oldUser, _ := h.userRepo.GetUserByID(r.Context(), id)
+
 	user, err := h.userRepo.UpdateUser(r.Context(), id, &req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Sync team categories if user is a secretary and team_id may have changed
+	if h.teamRepo != nil && user.Type != nil && *user.Type == "secretary" {
+		// Sync old team
+		if oldUser != nil && oldUser.TeamID != nil {
+			h.teamRepo.SyncTeamCategories(r.Context(), *oldUser.TeamID)
+		}
+		// Sync new team
+		if user.TeamID != nil {
+			h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
+		}
 	}
 
 	respondJSON(w, http.StatusOK, user)
@@ -272,9 +293,17 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get user before deleting to know team_id
+	user, _ := h.userRepo.GetUserByID(r.Context(), id)
+
 	if err := h.userRepo.DeleteUser(r.Context(), id); err != nil {
 		respondError(w, http.StatusNotFound, "user not found")
 		return
+	}
+
+	// Sync team categories if deleted user was a secretary with a team
+	if user != nil && user.Type != nil && *user.Type == "secretary" && user.TeamID != nil && h.teamRepo != nil {
+		h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
 	}
 
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "user deleted successfully"})

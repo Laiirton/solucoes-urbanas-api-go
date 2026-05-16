@@ -239,7 +239,7 @@ func (r *TeamRepository) FindTeamByRegionAndCategory(ctx context.Context, region
 	)
 	if err == nil {
 		// Sync categories from secretary to team
-		r.syncTeamCategories(ctx, team.ID)
+		r.SyncTeamCategories(ctx, team.ID)
 		return team, nil
 	}
 
@@ -291,15 +291,15 @@ func (r *TeamRepository) FindCityWideTeamByCategory(ctx context.Context, service
 	)
 	if err == nil {
 		// Sync categories from secretary to team
-		r.syncTeamCategories(ctx, team.ID)
+		r.SyncTeamCategories(ctx, team.ID)
 		return team, nil
 	}
 
 	return nil, fmt.Errorf("no city-wide team found for category '%s'", serviceCategory)
 }
 
-// syncTeamCategories syncs the team's categories from all its secretaries' work_area values.
-func (r *TeamRepository) syncTeamCategories(ctx context.Context, teamID int64) {
+// SyncTeamCategories syncs the team's categories from all its secretaries' work_area values.
+func (r *TeamRepository) SyncTeamCategories(ctx context.Context, teamID int64) {
 	_, _ = r.db.Exec(ctx, `
 		UPDATE teams t
 		SET categories = COALESCE(
@@ -419,7 +419,7 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, userID int64) er
 	}
 
 	// Sync team categories from secretary work_area
-	r.syncTeamCategories(ctx, teamID)
+	r.SyncTeamCategories(ctx, teamID)
 
 	return nil
 }
