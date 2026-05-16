@@ -206,6 +206,14 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 		respondError(w, http.StatusBadRequest, "invalid service request id")
 		return
 	}
+
+	// Team ownership check for secretary/attendant
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok && !CanManageRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
 	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "service request not found")
@@ -336,6 +344,13 @@ func (h *ServiceRequestHandler) UpdateServiceRequestStatus(w http.ResponseWriter
 		return
 	}
 
+	// Team ownership check for secretary/attendant
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok && !CanManageRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
+		respondError(w, http.StatusNotFound, "service request not found")
+		return
+	}
+
 	var req models.UpdateServiceRequestStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -370,6 +385,16 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid service request id")
 		return
+	}
+
+	// Only admin can delete service requests
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok {
+		user, userErr := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if userErr != nil || user.Type == nil || *user.Type != "admin" {
+			respondError(w, http.StatusForbidden, "only admins can delete service requests")
+			return
+		}
 	}
 
 	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)

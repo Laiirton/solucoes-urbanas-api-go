@@ -60,7 +60,7 @@ func Setup(
 	regionHandler := handlers.NewRegionHandler(regionRepo, userRepo)
 	appConfigHandler := handlers.NewAppConfigHandler(appConfigRepo, storageService)
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
-	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, uploadService, srHandler)
+	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, userRepo, uploadService, srHandler)
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo, srRepo, teamRepo, ratingRepo, userRepo)
 
 	// Routes under /api

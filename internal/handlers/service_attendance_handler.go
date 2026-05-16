@@ -16,14 +16,16 @@ import (
 type ServiceAttendanceHandler struct {
 	repo          *repository.ServiceAttendanceRepository
 	srRepo        *repository.ServiceRequestRepository
+	userRepo      *repository.UserRepository
 	uploadService *services.UploadService
-	notifHandler  *ServiceRequestHandler // Reuse notification logic
+	notifHandler  *ServiceRequestHandler
 }
 
-func NewServiceAttendanceHandler(repo *repository.ServiceAttendanceRepository, srRepo *repository.ServiceRequestRepository, uploadService *services.UploadService, notifHandler *ServiceRequestHandler) *ServiceAttendanceHandler {
+func NewServiceAttendanceHandler(repo *repository.ServiceAttendanceRepository, srRepo *repository.ServiceRequestRepository, userRepo *repository.UserRepository, uploadService *services.UploadService, notifHandler *ServiceRequestHandler) *ServiceAttendanceHandler {
 	return &ServiceAttendanceHandler{
 		repo:          repo,
 		srRepo:        srRepo,
+		userRepo:      userRepo,
 		uploadService: uploadService,
 		notifHandler:  notifHandler,
 	}
@@ -77,6 +79,13 @@ func (h *ServiceAttendanceHandler) CreateAttendance(w http.ResponseWriter, r *ht
 
 	if req.Notes == "" {
 		respondError(w, http.StatusBadRequest, "notes are required")
+		return
+	}
+
+	// Team ownership check for secretary/attendant
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok && !CanManageRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, requestID) {
+		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
 

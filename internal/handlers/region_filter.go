@@ -81,3 +81,26 @@ func CanManageTeam(ctx context.Context, userRepo *repository.UserRepository, use
 
 	return false
 }
+
+// CanManageRequest checks if the user can manage the given service request.
+func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
+	user, err := userRepo.GetUserByID(ctx, userID)
+	if err != nil || user.Type == nil {
+		return false
+	}
+
+	if *user.Type == "admin" {
+		return true
+	}
+
+	if *user.Type != "secretary" && *user.Type != "attendant" {
+		return false
+	}
+
+	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
+	if err != nil || sr.TeamID == nil || user.TeamID == nil {
+		return false
+	}
+
+	return *sr.TeamID == *user.TeamID
+}
