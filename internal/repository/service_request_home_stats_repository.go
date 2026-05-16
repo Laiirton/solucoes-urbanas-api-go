@@ -370,7 +370,8 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 			var req models.RecentRequest
 			var rawData []byte
 			var createdAt time.Time
-			if err := rows.Scan(&req.ID, &req.Name, &req.Service, &rawData, &req.Status, &createdAt); err != nil {
+			var geoAddr string
+			if err := rows.Scan(&req.ID, &req.Name, &req.Service, &rawData, &req.Status, &createdAt, &geoAddr); err != nil {
 				continue
 			}
 			req.Date = createdAt.Format("2006-01-02")
@@ -386,6 +387,29 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 					req.Bairro = bairro
 				}
 			}
+
+			// Fallback: extract bairro from geocoded_address if not found in request_data
+			if req.Bairro == "" && geoAddr != "" {
+				parts := strings.Split(geoAddr, ",")
+				if len(parts) >= 2 {
+					req.Bairro = strings.TrimSpace(parts[len(parts)-2])
+				} else if len(parts) == 1 {
+					// Try splitting by dash
+					dashParts := strings.Split(geoAddr, "-")
+					if len(dashParts) >= 2 {
+						req.Bairro = strings.TrimSpace(dashParts[len(dashParts)-2])
+					}
+				}
+			}
+
+			// Last resort: extract from address text
+			if req.Bairro == "" && req.Address != nil {
+				addrParts := strings.Split(*req.Address, ",")
+				if len(addrParts) >= 2 {
+					req.Bairro = strings.TrimSpace(addrParts[len(addrParts)-1])
+				}
+			}
+
 			list = append(list, req)
 		}
 		if list == nil {
@@ -395,7 +419,7 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 	}
 
 	recentQuery := fmt.Sprintf(`
-		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at, COALESCE(sr.geocoded_address, '')
 		FROM service_requests sr
 		LEFT JOIN users u ON sr.user_id = u.id
 		%s
@@ -404,7 +428,7 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 	recent = fetchRecent(recentQuery, args...)
 
 	delayedQuery := fmt.Sprintf(`
-		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at, COALESCE(sr.geocoded_address, '')
 		FROM service_requests sr
 		LEFT JOIN users u ON sr.user_id = u.id
 		%s
@@ -414,7 +438,7 @@ func (r *ServiceRequestRepository) computeRecentRequests(ctx context.Context, ba
 	delayed = fetchRecent(delayedQuery, args...)
 
 	newQuery := fmt.Sprintf(`
-		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at
+		SELECT sr.id, u.full_name, sr.service_title, sr.request_data, sr.status, sr.created_at, COALESCE(sr.geocoded_address, '')
 		FROM service_requests sr
 		LEFT JOIN users u ON sr.user_id = u.id
 		%s
