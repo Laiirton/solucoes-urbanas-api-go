@@ -47,8 +47,12 @@ func (h *TeamHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.RegionID == 0 {
-		respondError(w, http.StatusBadRequest, "name and region_id are required")
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if !req.CityWide && req.RegionID == 0 {
+		respondError(w, http.StatusBadRequest, "region_id is required when team is not city-wide")
 		return
 	}
 

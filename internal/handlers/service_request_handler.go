@@ -593,16 +593,12 @@ func getNestedFloat(data map[string]interface{}, objKey, fieldKey string) (float
 }
 
 // lookupRegionAndTeam tenta encontrar região pelo bairro e equipe pela região + categoria.
-// Retorna false se nenhuma equipe atende a categoria do serviço.
 func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro, serviceCategory string, currentRegionID, currentTeamID *int64) (*int64, *int64, bool) {
 	// Step 1: Try to find region by neighborhood name
 	if bairro != "" {
 		region, err := h.regionRepo.FindByNeighborhood(ctx, bairro)
 		if err != nil {
 			region, err = h.regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
-		}
-		if err != nil {
-			region = findRegionByCityName(ctx, h.regionRepo, bairro)
 		}
 		if region != nil {
 			regionID := &region.ID
@@ -618,8 +614,7 @@ func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro,
 		}
 	}
 
-	// Step 2: City-wide fallback — try to find ANY team whose secretary handles this category,
-	// regardless of region (region_id IS NULL)
+	// Step 2: City-wide fallback — find any city-wide team that handles this category
 	if serviceCategory != "" {
 		team, err := h.teamRepo.FindCityWideTeamByCategory(ctx, serviceCategory)
 		if err == nil {
@@ -627,7 +622,6 @@ func (h *ServiceRequestHandler) lookupRegionAndTeam(ctx context.Context, bairro,
 		}
 	}
 
-	// Step 3: No region and no city-wide team found
 	if bairro == "" {
 		return currentRegionID, currentTeamID, true
 	}

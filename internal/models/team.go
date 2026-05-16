@@ -9,20 +9,26 @@ type Team struct {
 	RegionName  string    `json:"region_name,omitempty"`
 	Description *string   `json:"description,omitempty"`
 	WorkAreas   []string  `json:"work_areas,omitempty"`
+	Categories  []string  `json:"categories,omitempty"`
+	CityWide    bool      `json:"city_wide"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CreateTeamRequest struct {
-	Name        string  `json:"name"`
-	RegionID    int64   `json:"region_id"`
-	Description *string `json:"description,omitempty"`
+	Name        string   `json:"name"`
+	RegionID    int64    `json:"region_id"`
+	Description *string  `json:"description,omitempty"`
+	Categories  []string `json:"categories,omitempty"`
+	CityWide    bool     `json:"city_wide"`
 }
 
 type UpdateTeamRequest struct {
-	Name        *string `json:"name,omitempty"`
-	RegionID    *int64  `json:"region_id,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Name        *string  `json:"name,omitempty"`
+	RegionID    *int64   `json:"region_id,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	Categories  []string `json:"categories,omitempty"`
+	CityWide    *bool    `json:"city_wide,omitempty"`
 }
 
 type TeamStats struct {

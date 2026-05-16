@@ -19,13 +19,18 @@ func NewTeamRepository(db *pgxpool.Pool) *TeamRepository {
 
 func (r *TeamRepository) CreateTeam(ctx context.Context, req *models.CreateTeamRequest) (*models.Team, error) {
 	query := `
-		INSERT INTO teams (name, region_id, description, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
-		RETURNING id, name, region_id, description, created_at, updated_at`
+		INSERT INTO teams (name, region_id, description, categories, city_wide, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		RETURNING id, name, region_id, description, categories, city_wide, created_at, updated_at`
+
+	categoriesJSON, _ := json.Marshal(req.Categories)
+	if string(categoriesJSON) == "null" {
+		categoriesJSON = []byte("[]")
+	}
 
 	team := &models.Team{}
-	err := r.db.QueryRow(ctx, query, req.Name, req.RegionID, req.Description).Scan(
-		&team.ID, &team.Name, &team.RegionID, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+	err := r.db.QueryRow(ctx, query, req.Name, req.RegionID, req.Description, string(categoriesJSON), req.CityWide).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.Description, &team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create team: %w", err)
@@ -41,14 +46,16 @@ func (r *TeamRepository) CreateTeam(ctx context.Context, req *models.CreateTeamR
 
 func (r *TeamRepository) GetTeamByID(ctx context.Context, id int64) (*models.Team, error) {
 	query := `
-		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
 		FROM teams t
 		LEFT JOIN regions rg ON t.region_id = rg.id
 		WHERE t.id = $1`
 
 	team := &models.Team{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("team not found: %w", err)
@@ -64,7 +71,8 @@ func (r *TeamRepository) GetTeamByID(ctx context.Context, id int64) (*models.Tea
 
 func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, limit int) ([]*models.Team, error) {
 	query := `
-		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
 		FROM teams t
 		LEFT JOIN regions rg ON t.region_id = rg.id`
 
@@ -91,26 +99,12 @@ func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, lim
 	for rows.Next() {
 		team := &models.Team{}
 		if err := rows.Scan(
-			&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+			&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+			&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan team: %w", err)
 		}
 		teams = append(teams, team)
-	}
-
-	if len(teams) > 0 {
-		ids := make([]int64, len(teams))
-		for i, t := range teams {
-			ids[i] = t.ID
-		}
-		areasMap, err := r.getTeamsWorkAreas(ctx, ids)
-		if err == nil {
-			for _, t := range teams {
-				if wa, ok := areasMap[t.ID]; ok {
-					t.WorkAreas = wa
-				}
-			}
-		}
 	}
 
 	if teams == nil {
@@ -121,18 +115,29 @@ func (r *TeamRepository) ListTeams(ctx context.Context, search string, page, lim
 }
 
 func (r *TeamRepository) UpdateTeam(ctx context.Context, id int64, req *models.UpdateTeamRequest) (*models.Team, error) {
+	categoriesJSON, _ := json.Marshal(req.Categories)
+	if string(categoriesJSON) == "null" {
+		categoriesJSON = nil
+	}
+
 	query := `
 		UPDATE teams SET
 			name = COALESCE($1, name),
 			region_id = COALESCE($2, region_id),
 			description = COALESCE($3, description),
+			categories = COALESCE($4, categories),
+			city_wide = COALESCE($5, city_wide),
 			updated_at = NOW()
-		WHERE id = $4
-		RETURNING id, name, region_id, description, created_at, updated_at`
+		WHERE id = $6
+		RETURNING id, name, region_id, description, categories, city_wide, created_at, updated_at`
 
 	team := &models.Team{}
-	err := r.db.QueryRow(ctx, query, req.Name, req.RegionID, req.Description, id).Scan(
-		&team.ID, &team.Name, &team.RegionID, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+	err := r.db.QueryRow(ctx, query,
+		req.Name, req.RegionID, req.Description,
+		string(categoriesJSON), req.CityWide, id,
+	).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update team: %w", err)
@@ -190,11 +195,33 @@ func (r *TeamRepository) FindTeamsByRegion(ctx context.Context, regionID int64) 
 }
 
 // FindTeamByRegionAndCategory finds the best team for a region that handles the given service category.
-// Matches by checking which team's secretary has the category in their work_area.
+// Matches by checking the team's categories column first, then falls back to secretary work_area for legacy data.
 func (r *TeamRepository) FindTeamByRegionAndCategory(ctx context.Context, regionID int64, serviceCategory string) (*models.Team, error) {
 	catJSON, _ := json.Marshal(serviceCategory)
+
+	// Priority 1: team with matching region_id AND categories
 	query := `
-		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE t.region_id = $1
+		  AND t.categories::jsonb @> $2::jsonb
+		LIMIT 1`
+
+	team := &models.Team{}
+	err := r.db.QueryRow(ctx, query, regionID, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
+	)
+	if err == nil {
+		return team, nil
+	}
+
+	// Priority 2: fallback to legacy secretary work_area
+	legacyQuery := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
 		FROM teams t
 		LEFT JOIN regions rg ON t.region_id = rg.id
 		WHERE t.region_id = $1
@@ -206,17 +233,90 @@ func (r *TeamRepository) FindTeamByRegionAndCategory(ctx context.Context, region
 		  )
 		LIMIT 1`
 
-	team := &models.Team{}
-	err := r.db.QueryRow(ctx, query, regionID, string(catJSON)).Scan(
-		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
+	err = r.db.QueryRow(ctx, legacyQuery, regionID, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("no team found for region %d and category '%s': %w", regionID, serviceCategory, err)
+	if err == nil {
+		// Sync categories from secretary to team
+		r.syncTeamCategories(ctx, team.ID)
+		return team, nil
 	}
-	return team, nil
+
+	return nil, fmt.Errorf("no team found for region %d and category '%s'", regionID, serviceCategory)
 }
 
-// GetTeamByRegion returns the first team assigned to a given region (legacy, for single-team-per-region setups).
+// FindCityWideTeamByCategory finds a city-wide team (city_wide=true OR region_id IS NULL)
+// whose categories or secretary work_area handle the given service category.
+func (r *TeamRepository) FindCityWideTeamByCategory(ctx context.Context, serviceCategory string) (*models.Team, error) {
+	catJSON, _ := json.Marshal(serviceCategory)
+
+	// Priority 1: team with categories that match AND (city_wide=true OR no region)
+	query := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE (t.city_wide = true OR t.region_id IS NULL)
+		  AND t.categories::jsonb @> $1::jsonb
+		LIMIT 1`
+
+	team := &models.Team{}
+	err := r.db.QueryRow(ctx, query, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
+	)
+	if err == nil {
+		return team, nil
+	}
+
+	// Priority 2: fallback to legacy secretary work_area
+	legacyQuery := `
+		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description,
+		       COALESCE(t.categories, '[]'::jsonb), t.city_wide, t.created_at, t.updated_at
+		FROM teams t
+		LEFT JOIN regions rg ON t.region_id = rg.id
+		WHERE (t.city_wide = true OR t.region_id IS NULL)
+		  AND t.id IN (
+			SELECT u.team_id FROM users u
+			WHERE u.team_id IS NOT NULL
+			  AND u.type = 'secretary'
+			  AND u.work_area::jsonb @> $1::jsonb
+		  )
+		LIMIT 1`
+
+	err = r.db.QueryRow(ctx, legacyQuery, string(catJSON)).Scan(
+		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description,
+		&team.Categories, &team.CityWide, &team.CreatedAt, &team.UpdatedAt,
+	)
+	if err == nil {
+		// Sync categories from secretary to team
+		r.syncTeamCategories(ctx, team.ID)
+		return team, nil
+	}
+
+	return nil, fmt.Errorf("no city-wide team found for category '%s'", serviceCategory)
+}
+
+// syncTeamCategories syncs the team's categories from all its secretaries' work_area values.
+func (r *TeamRepository) syncTeamCategories(ctx context.Context, teamID int64) {
+	_, _ = r.db.Exec(ctx, `
+		UPDATE teams t
+		SET categories = COALESCE(
+			(
+				SELECT jsonb_agg(DISTINCT jsonb_array_elements_text(u.work_area::jsonb))
+				FROM users u
+				WHERE u.team_id = t.id
+				  AND u.type = 'secretary'
+				  AND u.work_area IS NOT NULL
+				  AND u.work_area::jsonb != '[]'::jsonb
+			),
+			'[]'::jsonb
+		)
+		WHERE t.id = $1`, teamID)
+}
+
+// ListTeamsByWorkArea returns all teams whose secretary handles the given category.
 func (r *TeamRepository) GetTeamByRegion(ctx context.Context, regionID int64) (*models.Team, error) {
 	query := `
 		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
@@ -314,6 +414,10 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, userID int64) er
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("user not found")
 	}
+
+	// Sync team categories from secretary work_area
+	r.syncTeamCategories(ctx, teamID)
+
 	return nil
 }
 
@@ -512,31 +616,4 @@ func (r *TeamRepository) getTeamsWorkAreas(ctx context.Context, teamIDs []int64)
 		}
 	}
 	return areasMap, nil
-}
-
-// FindCityWideTeamByCategory finds a team with no specific region (region_id IS NULL)
-// whose secretary handles the given service category. Used as fallback for small towns.
-func (r *TeamRepository) FindCityWideTeamByCategory(ctx context.Context, serviceCategory string) (*models.Team, error) {
-	catJSON, _ := json.Marshal(serviceCategory)
-	query := `
-		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
-		FROM teams t
-		LEFT JOIN regions rg ON t.region_id = rg.id
-		WHERE t.region_id IS NULL
-		  AND t.id IN (
-			SELECT u.team_id FROM users u
-			WHERE u.team_id IS NOT NULL
-			  AND u.type = 'secretary'
-			  AND u.work_area::jsonb @> $1::jsonb
-		  )
-		LIMIT 1`
-
-	team := &models.Team{}
-	err := r.db.QueryRow(ctx, query, string(catJSON)).Scan(
-		&team.ID, &team.Name, &team.RegionID, &team.RegionName, &team.Description, &team.CreatedAt, &team.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("no city-wide team found for category '%s': %w", serviceCategory, err)
-	}
-	return team, nil
 }

@@ -97,35 +97,6 @@ func CanViewRequest(ctx context.Context, userRepo *repository.UserRepository, sr
 	return CanManageRequest(ctx, userRepo, srRepo, userID, requestID)
 }
 
-// findRegionByCityName attempts to find a region when the provided bairro is not found.
-// For small towns, the bairro name may actually be the city name.
-// Falls back to looking up by common neighborhood names for the city.
-func findRegionByCityName(ctx context.Context, regionRepo *repository.RegionRepository, bairro string) *models.Region {
-	// Try the bairro directly first
-	region, err := regionRepo.FindByNeighborhood(ctx, bairro)
-	if err == nil {
-		return region
-	}
-
-	// Try case-insensitive
-	region, err = regionRepo.FindByNeighborhoodCaseInsensitive(ctx, bairro)
-	if err == nil {
-		return region
-	}
-
-	// If bairro looks like a city name (not a neighborhood), try common fallbacks
-	// For Desterro-PB, the only bairro is "Centro"
-	fallbacks := []string{"Centro", "centro", "CENTRO"}
-	for _, fb := range fallbacks {
-		region, err = regionRepo.FindByNeighborhood(ctx, fb)
-		if err == nil {
-			return region
-		}
-	}
-
-	return nil
-}
-
 // CanManageRequest checks if the user can manage the given service request.
 func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
 	user, err := userRepo.GetUserByID(ctx, userID)
