@@ -67,7 +67,7 @@ func Setup(
 	r.Route("/api", func(r chi.Router) {
 
 		// Health check
-		r.Head("/health", func(w http.ResponseWriter, r *http.Request) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":    "ok",
