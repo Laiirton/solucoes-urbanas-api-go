@@ -6,12 +6,15 @@ ADD COLUMN IF NOT EXISTS city_wide BOOLEAN DEFAULT false;
 UPDATE teams t
 SET categories = COALESCE(
     (
-        SELECT jsonb_agg(DISTINCT jsonb_array_elements_text(u.work_area::jsonb))
-        FROM users u
-        WHERE u.team_id = t.id
-          AND u.type = 'secretary'
-          AND u.work_area IS NOT NULL
-          AND u.work_area::jsonb != '[]'::jsonb
+        SELECT jsonb_agg(DISTINCT wa)
+        FROM (
+            SELECT jsonb_array_elements_text(u.work_area::jsonb) AS wa
+            FROM users u
+            WHERE u.team_id = t.id
+              AND u.type = 'secretary'
+              AND u.work_area IS NOT NULL
+              AND u.work_area::jsonb != '[]'::jsonb
+        ) sub
     ),
     '[]'::jsonb
 )
