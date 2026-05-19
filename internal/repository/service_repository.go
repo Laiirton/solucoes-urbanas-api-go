@@ -133,7 +133,9 @@ func (r *ServiceRepository) ListServices(ctx context.Context, onlyActive bool, s
 
 func (r *ServiceRepository) ListServicesByCategory(ctx context.Context, category string, onlyActive bool, allowedServices []int64) ([]*models.Service, error) {
 	query := `SELECT id, title, description, category, category_id, form_schema, is_active, created_at, updated_at
-              FROM services WHERE category = $1`
+              FROM services 
+              WHERE (TRANSLATE(LOWER(category), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') = TRANSLATE(LOWER($1), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
+                 OR category_id = (SELECT id FROM categories WHERE TRANSLATE(LOWER(name), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') = TRANSLATE(LOWER($1), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIMIT 1))`
 
 	var args []interface{}
 	args = append(args, category)

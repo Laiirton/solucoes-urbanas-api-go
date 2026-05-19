@@ -30,6 +30,16 @@ func NewServiceHandler(serviceRepo *repository.ServiceRepository, categoryRepo *
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	onlyActive := r.URL.Query().Get("all") != "true"
 
+	if r.URL.Query().Get("flat") == "true" {
+		services, err := h.serviceRepo.ListServices(r.Context(), onlyActive, "", 0, 0, nil, nil)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to list flat services: "+err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, services)
+		return
+	}
+
 	categories, err := h.categoryRepo.List(r.Context(), onlyActive)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list categories")
