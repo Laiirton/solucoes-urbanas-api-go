@@ -472,7 +472,6 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
-
 	// Cascade delete related system notifications
 	if h.sysNotifRepo != nil {
 		if err := h.sysNotifRepo.DeleteByTypeAndRefID(r.Context(), "service_request", id); err != nil {
@@ -497,7 +496,23 @@ func extractAddressFromRequestData(requestData json.RawMessage) string {
 	if err := json.Unmarshal(requestData, &data); err != nil {
 		return ""
 	}
-	return getFirstNonEmpty(data, "endereco", "address", "logradouro", "street")
+
+	// Try prioritized keys first
+	if val := getFirstNonEmpty(data, "endereco", "address", "logradouro", "street"); val != "" {
+		return val
+	}
+
+	// Dynamic fallback: find a string key where there's a corresponding key + "_coords" in the map
+	for key, val := range data {
+		if strVal, ok := val.(string); ok && strVal != "" {
+			coordsKey := key + "_coords"
+			if _, hasCoords := data[coordsKey]; hasCoords {
+				return strVal
+			}
+		}
+	}
+
+	return ""
 }
 
 // extractBairroFromRequestData extrai o bairro enviado pelo app (via MapModal)
@@ -519,6 +534,16 @@ func extractBairroFromRequestData(requestData json.RawMessage) string {
 	if bairro := getField[string](data, "localizacao_bairro"); bairro != "" {
 		return bairro
 	}
+
+	// Dynamic fallback: find a string key ending with "_bairro"
+	for key, val := range data {
+		if strings.HasSuffix(key, "_bairro") {
+			if strVal, ok := val.(string); ok && strVal != "" {
+				return strVal
+			}
+		}
+	}
+
 	return ""
 }
 
@@ -534,6 +559,7 @@ func extractCoordinatesFromRequestData(requestData json.RawMessage) (*float64, *
 		return nil, nil
 	}
 
+	// First try prioritized keys
 	keys := []string{"endereco_coords", "localizacao_coords"}
 	for _, key := range keys {
 		if coords, ok := data[key].(map[string]interface{}); ok {
@@ -546,6 +572,24 @@ func extractCoordinatesFromRequestData(requestData json.RawMessage) (*float64, *
 			if latVal, ok := coords["latitude"].(float64); ok {
 				if lonVal, ok := coords["longitude"].(float64); ok {
 					return &latVal, &lonVal
+				}
+			}
+		}
+	}
+
+	// Dynamic fallback: look for any key ending with "_coords"
+	for key, val := range data {
+		if strings.HasSuffix(key, "_coords") {
+			if coords, ok := val.(map[string]interface{}); ok {
+				lat, hasLat := getNestedFloat(data, key, "latitude")
+				lon, hasLon := getNestedFloat(data, key, "longitude")
+				if hasLat && hasLon {
+					return &lat, &lon
+				}
+				if latVal, ok := coords["latitude"].(float64); ok {
+					if lonVal, ok := coords["longitude"].(float64); ok {
+						return &latVal, &lonVal
+					}
 				}
 			}
 		}
