@@ -58,9 +58,32 @@ func buildBaseWhere(isAdmin bool, userID int64, regionFilter, teamFilter *int64,
 	baseWhere := ""
 	var args []interface{}
 
-	// teamFilter vem primeiro: secretário/atendente veem apenas dados do time
+	// teamFilter vem primeiro: secretário/atendente veem apenas dados do time (incluindo fallbacks de não atribuídos de sua categoria)
 	if teamFilter != nil {
-		baseWhere = "WHERE sr.team_id = $1"
+		baseWhere = `WHERE (
+			sr.team_id = $1
+			OR (
+				sr.team_id IS NULL
+				AND (
+					EXISTS (
+						SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $1), '[]'::jsonb)) AS cat
+						WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+					)
+					OR EXISTS (
+						SELECT 1 FROM users u2 
+						WHERE u2.team_id = $1 AND u2.work_area IS NOT NULL
+						  AND EXISTS (
+							  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+							  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						  )
+					)
+				)
+				AND (
+					(SELECT city_wide FROM teams WHERE id = $1) = true 
+					OR sr.region_id = (SELECT region_id FROM teams WHERE id = $1)
+				)
+			)
+		)`
 		args = append(args, *teamFilter)
 	} else if !isAdmin {
 		baseWhere = "WHERE sr.user_id = $1"
@@ -531,13 +554,39 @@ func (r *ServiceRequestRepository) ListMapLocations(ctx context.Context, regionF
 	}
 
 	if teamFilter != nil {
+		paramIdx := len(args) + 1
+		teamCond := fmt.Sprintf(`(
+			sr.team_id = $%d
+			OR (
+				sr.team_id IS NULL
+				AND (
+					EXISTS (
+						SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $%d), '[]'::jsonb)) AS cat
+						WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+					)
+					OR EXISTS (
+						SELECT 1 FROM users u2 
+						WHERE u2.team_id = $%d AND u2.work_area IS NOT NULL
+						  AND EXISTS (
+							  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+							  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						  )
+					)
+				)
+				AND (
+					(SELECT city_wide FROM teams WHERE id = $%d) = true 
+					OR sr.region_id = (SELECT region_id FROM teams WHERE id = $%d)
+				)
+			)
+		)`, paramIdx, paramIdx, paramIdx, paramIdx, paramIdx)
+
 		if whereApplied {
-			query += fmt.Sprintf(` AND sr.team_id = $%d`, len(args)+1)
+			query += " AND " + teamCond
 		} else {
-			query += ` WHERE sr.team_id = $1`
+			query += " WHERE " + teamCond
+			whereApplied = true
 		}
 		args = append(args, *teamFilter)
-		whereApplied = true
 	}
 
 	if startDate != nil && *startDate != "" {

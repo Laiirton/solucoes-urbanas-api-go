@@ -477,8 +477,31 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 			COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
 			COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::numeric, 1)
 				FILTER (WHERE status = 'completed'), 0) AS avg_days
-		FROM service_requests
-		WHERE team_id = $1`
+		FROM service_requests sr
+		WHERE (
+			sr.team_id = $1
+			OR (
+				sr.team_id IS NULL
+				AND (
+					EXISTS (
+						SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $1), '[]'::jsonb)) AS cat
+						WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+					)
+					OR EXISTS (
+						SELECT 1 FROM users u2 
+						WHERE u2.team_id = $1 AND u2.work_area IS NOT NULL
+						  AND EXISTS (
+							  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+							  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						  )
+					)
+				)
+				AND (
+					(SELECT city_wide FROM teams WHERE id = $1) = true 
+					OR sr.region_id = (SELECT region_id FROM teams WHERE id = $1)
+				)
+			)
+		)`
 
 	err = r.db.QueryRow(ctx, consolidatedQuery, teamID).Scan(
 		&stats.MemberCount,
@@ -494,8 +517,31 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 		r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE team_id = $1`, teamID).Scan(&stats.MemberCount)
 
 		rows, err := r.db.Query(ctx, `
-			SELECT status, COUNT(*) FROM service_requests
-			WHERE team_id = $1 GROUP BY status`, teamID)
+			SELECT status, COUNT(*) FROM service_requests sr
+			WHERE (
+				sr.team_id = $1
+				OR (
+					sr.team_id IS NULL
+					AND (
+						EXISTS (
+							SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $1), '[]'::jsonb)) AS cat
+							WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						)
+						OR EXISTS (
+							SELECT 1 FROM users u2 
+							WHERE u2.team_id = $1 AND u2.work_area IS NOT NULL
+							  AND EXISTS (
+								  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+								  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+							  )
+						)
+					)
+					AND (
+						(SELECT city_wide FROM teams WHERE id = $1) = true 
+						OR sr.region_id = (SELECT region_id FROM teams WHERE id = $1)
+					)
+				)
+			) GROUP BY status`, teamID)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
@@ -520,8 +566,31 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 
 		r.db.QueryRow(ctx, `
 			SELECT COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::numeric, 1), 0)
-			FROM service_requests
-			WHERE team_id = $1 AND status = 'completed'`, teamID,
+			FROM service_requests sr
+			WHERE (
+				sr.team_id = $1
+				OR (
+					sr.team_id IS NULL
+					AND (
+						EXISTS (
+							SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $1), '[]'::jsonb)) AS cat
+							WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						)
+						OR EXISTS (
+							SELECT 1 FROM users u2 
+							WHERE u2.team_id = $1 AND u2.work_area IS NOT NULL
+							  AND EXISTS (
+								  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+								  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+							  )
+						)
+					)
+					AND (
+						(SELECT city_wide FROM teams WHERE id = $1) = true 
+						OR sr.region_id = (SELECT region_id FROM teams WHERE id = $1)
+					)
+				)
+			) AND sr.status = 'completed'`, teamID,
 		).Scan(&stats.AvgResolutionDays)
 	}
 
@@ -535,7 +604,30 @@ func (r *TeamRepository) GetTeamStats(ctx context.Context, teamID int64) (*model
 		       sr.team_id, sr.region_id, COALESCE(rg.name, ''), sr.created_at, sr.updated_at
 		FROM service_requests sr
 		LEFT JOIN regions rg ON sr.region_id = rg.id
-		WHERE sr.team_id = $1
+		WHERE (
+			sr.team_id = $1
+			OR (
+				sr.team_id IS NULL
+				AND (
+					EXISTS (
+						SELECT 1 FROM jsonb_array_elements_text(COALESCE((SELECT categories FROM teams WHERE id = $1), '[]'::jsonb)) AS cat
+						WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+					)
+					OR EXISTS (
+						SELECT 1 FROM users u2 
+						WHERE u2.team_id = $1 AND u2.work_area IS NOT NULL
+						  AND EXISTS (
+							  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+							  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+						  )
+					)
+				)
+				AND (
+					(SELECT city_wide FROM teams WHERE id = $1) = true 
+					OR sr.region_id = (SELECT region_id FROM teams WHERE id = $1)
+				)
+			)
+		)
 		ORDER BY sr.created_at DESC LIMIT 5`, teamID)
 	if err == nil {
 		defer recentRows.Close()
