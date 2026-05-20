@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -269,18 +268,6 @@ func (r *ServiceRequestRepository) ListServiceRequestsByUser(ctx context.Context
 }
 
 func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context, teamID int64, search, status string, page, limit int) ([]*models.ServiceRequest, error) {
-	// 1. Get secretary's work areas to filter by category
-	var workAreaJSON []byte
-	err := r.db.QueryRow(ctx, `
-		SELECT work_area FROM users 
-		WHERE team_id = $1 AND type = 'secretary' 
-		LIMIT 1`, teamID).Scan(&workAreaJSON)
-
-	var workAreas []string
-	if err == nil && workAreaJSON != nil {
-		json.Unmarshal(workAreaJSON, &workAreas)
-	}
-
 	query := `SELECT sr.id, sr.user_id, COALESCE(u.full_name, ''), sr.service_id, sr.protocol_number,
 	                 sr.service_title, sr.category, sr.request_data, sr.attachments, sr.status,
 	                 sr.latitude, sr.longitude, sr.geocoded_address,
@@ -291,14 +278,31 @@ func (r *ServiceRequestRepository) ListServiceRequestsByTeam(ctx context.Context
 	          LEFT JOIN users u ON sr.user_id = u.id
 	          LEFT JOIN teams t ON sr.team_id = t.id
 	          LEFT JOIN regions rg ON sr.region_id = rg.id
-	          WHERE sr.team_id = $1`
+	          CROSS JOIN teams t2
+	          WHERE t2.id = $1
+	            AND (
+	                sr.team_id = t2.id
+	                OR (
+	                    sr.team_id IS NULL
+	                    AND (
+	                        EXISTS (
+	                            SELECT 1 FROM jsonb_array_elements_text(COALESCE(t2.categories, '[]'::jsonb)) AS cat
+	                            WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+	                        )
+	                        OR EXISTS (
+	                            SELECT 1 FROM users u2 
+	                            WHERE u2.team_id = t2.id AND u2.type = 'secretary' AND u2.work_area IS NOT NULL
+	                              AND EXISTS (
+	                                  SELECT 1 FROM jsonb_array_elements_text(COALESCE(u2.work_area::jsonb, '[]'::jsonb)) AS cat
+	                                  WHERE LOWER(TRANSLATE(cat, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn')) = LOWER(TRANSLATE(sr.category, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'))
+	                              )
+	                        )
+	                    )
+	                    AND (t2.city_wide = true OR sr.region_id = t2.region_id)
+	                )
+	            )`
 
 	args := []interface{}{teamID}
-
-	if len(workAreas) > 0 {
-		query += fmt.Sprintf(` AND sr.category = ANY($%d)`, len(args)+1)
-		args = append(args, workAreas)
-	}
 
 	if search != "" {
 		query += fmt.Sprintf(` AND (sr.service_title ILIKE $%d OR sr.category ILIKE $%d)`, len(args)+1, len(args)+1)

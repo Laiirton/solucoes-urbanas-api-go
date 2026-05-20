@@ -55,10 +55,13 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	var teamFilter *int64
 	if currentUser.Type != nil && *currentUser.Type == "secretary" {
-		teamFilter = currentUser.TeamID
-		if teamFilter == nil {
-			respondJSON(w, http.StatusOK, []*models.User{})
-			return
+		// If listing users without a team, do not filter by secretary's team ID
+		if !teamNull {
+			teamFilter = currentUser.TeamID
+			if teamFilter == nil {
+				respondJSON(w, http.StatusOK, []*models.User{})
+				return
+			}
 		}
 	}
 

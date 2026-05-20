@@ -131,7 +131,8 @@ func (r *UserRepository) GetUserByUsernameOrEmail(ctx context.Context, identifie
 func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
 		SELECT u.id, u.username, u.email, u.full_name, u.cpf, u.phone, u.birth_date, u.type, u.team_id, u.work_area, u.profile_image_url, u.created_at, u.updated_at,
-		 t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
+		 t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at,
+		 COALESCE(t.categories, '[]'::jsonb), COALESCE(t.city_wide, false)
 		FROM users u
 		LEFT JOIN teams t ON u.team_id = t.id
 		LEFT JOIN regions rg ON t.region_id = rg.id
@@ -144,6 +145,8 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	var tRegionName string
 	var tDesc *string
 	var tCreatedAt, tUpdatedAt *time.Time
+	var tCategoriesJSON []byte
+	var tCityWide bool
 	var workAreaResult []byte
 	var bd *time.Time
 
@@ -153,6 +156,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 		&user.Type, &user.TeamID, &workAreaResult, &user.ProfileImageURL,
 		&user.CreatedAt, &user.UpdatedAt,
 		&tID, &tName, &tRegionID, &tRegionName, &tDesc, &tCreatedAt, &tUpdatedAt,
+		&tCategoriesJSON, &tCityWide,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -167,12 +171,19 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id int64) (*models.Use
 	}
 
 	if tID != nil {
+		var tCategories []string
+		if tCategoriesJSON != nil {
+			json.Unmarshal(tCategoriesJSON, &tCategories)
+		}
+
 		user.Team = &models.Team{
 			ID:          *tID,
 			Name:        *tName,
 			RegionID:    tRegionID,
 			RegionName:  tRegionName,
 			Description: tDesc,
+			Categories:  tCategories,
+			CityWide:    tCityWide,
 			CreatedAt:   *tCreatedAt,
 			UpdatedAt:   *tUpdatedAt,
 		}

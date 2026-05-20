@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"strings"
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
@@ -113,9 +114,63 @@ func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, 
 	}
 
 	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
-	if err != nil || sr.TeamID == nil || user.TeamID == nil {
+	if err != nil || user.TeamID == nil || user.Team == nil {
 		return false
 	}
 
-	return *sr.TeamID == *user.TeamID
+	// Case 1: The request is already assigned to a team
+	if sr.TeamID != nil {
+		return *sr.TeamID == *user.TeamID
+	}
+
+	// Case 2: The request is NOT assigned (TeamID == nil)
+	// The operator can manage it if:
+	// A) The request category matches the team's categories OR the secretary/attendant's work areas on that team
+	// AND
+	// B) The territorial scope matches:
+	//    - Either the team is city-wide (CityWide == true)
+	//    - Or the request region matches the team's region
+	
+	// Collect categories from Team and user's WorkArea
+	var categories []string
+	categories = append(categories, user.Team.Categories...)
+	categories = append(categories, user.WorkArea...)
+
+	if !categoryMatches(sr.Category, categories) {
+		return false
+	}
+
+	// Check territorial scope
+	if user.Team.CityWide {
+		return true
+	}
+
+	if sr.RegionID != nil && user.Team.RegionID != nil && *sr.RegionID == *user.Team.RegionID {
+		return true
+	}
+
+	return false
+}
+
+func normalizeString(s string) string {
+	s = strings.ToLower(s)
+	r := strings.NewReplacer(
+		"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
+		"é", "e", "è", "e", "ê", "e", "ë", "e",
+		"í", "i", "ì", "i", "î", "i", "ï", "i",
+		"ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
+		"ú", "u", "ù", "u", "û", "u", "ü", "u",
+		"ç", "c", "ñ", "n",
+	)
+	return r.Replace(s)
+}
+
+func categoryMatches(targetCat string, categories []string) bool {
+	normTarget := normalizeString(targetCat)
+	for _, cat := range categories {
+		if normalizeString(cat) == normTarget {
+			return true
+		}
+	}
+	return false
 }

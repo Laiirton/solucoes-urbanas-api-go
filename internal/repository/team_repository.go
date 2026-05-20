@@ -319,7 +319,7 @@ func (r *TeamRepository) SyncTeamCategories(ctx context.Context, teamID int64) {
 		WHERE t.id = $1`, teamID)
 }
 
-// ListTeamsByWorkArea returns all teams whose secretary handles the given category.
+// GetTeamByRegion returns the first team assigned to a region.
 func (r *TeamRepository) GetTeamByRegion(ctx context.Context, regionID int64) (*models.Team, error) {
 	query := `
 		SELECT t.id, t.name, t.region_id, COALESCE(rg.name, ''), t.description, t.created_at, t.updated_at
@@ -375,23 +375,42 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, userID int64) er
 		return fmt.Errorf("team not found")
 	}
 
-	// 1. Get the user's type
+	// 1. Get the user's type and existing team
 	var userType *string
-	err = r.db.QueryRow(ctx, `SELECT type FROM users WHERE id = $1`, userID).Scan(&userType)
+	var existingTeamID *int64
+	err = r.db.QueryRow(ctx, `SELECT type, team_id FROM users WHERE id = $1`, userID).Scan(&userType, &existingTeamID)
 	if err != nil {
-		return fmt.Errorf("failed to get user type: %w", err)
+		return fmt.Errorf("failed to get user details: %w", err)
 	}
 
-	// 2. If user is an attendant, get the secretary's work areas
-	if userType != nil && *userType == "attendant" {
+	if existingTeamID != nil {
+		if *existingTeamID == teamID {
+			return fmt.Errorf("usuário já é membro desta equipe")
+		}
+		return fmt.Errorf("usuário já pertence a outra equipe")
+	}
+
+	// 2. If user is an attendant or secretary, handle work_area update
+	if userType != nil && (*userType == "attendant" || *userType == "secretary") {
 		var workAreaJSON []byte
-		err = r.db.QueryRow(ctx, `
-			SELECT work_area FROM users 
-			WHERE team_id = $1 AND type = 'secretary' 
-			LIMIT 1`, teamID).Scan(&workAreaJSON)
-		
+		if *userType == "attendant" {
+			err = r.db.QueryRow(ctx, `
+				SELECT COALESCE(
+					(SELECT work_area FROM users WHERE team_id = $1 AND type = 'secretary' AND work_area IS NOT NULL AND work_area::text != '[]' LIMIT 1),
+					(SELECT COALESCE(categories, '[]'::jsonb) FROM teams WHERE id = $1)
+				)
+			`, teamID).Scan(&workAreaJSON)
+		} else {
+			// For secretary, use existing work_area if not empty, otherwise fallback to team's categories
+			err = r.db.QueryRow(ctx, `
+				SELECT COALESCE(
+					(SELECT work_area FROM users WHERE id = $1 AND work_area IS NOT NULL AND work_area::text != '[]'),
+					(SELECT COALESCE(categories, '[]'::jsonb) FROM teams WHERE id = $2)
+				)
+			`, userID, teamID).Scan(&workAreaJSON)
+		}
+
 		if err == nil && workAreaJSON != nil {
-			// Update the user's team_id and work_area
 			result, err := r.db.Exec(ctx,
 				`UPDATE users SET team_id = $1, work_area = $2, updated_at = NOW() WHERE id = $3`,
 				teamID, workAreaJSON, userID,
@@ -402,11 +421,12 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID, userID int64) er
 			if result.RowsAffected() == 0 {
 				return fmt.Errorf("user not found")
 			}
+			r.SyncTeamCategories(ctx, teamID)
 			return nil
 		}
 	}
 
-	// Fallback to just updating team_id if not attendant or no secretary found
+	// Fallback to just updating team_id if not attendant or secretary, or if fallback queries failed
 	result, err := r.db.Exec(ctx,
 		`UPDATE users SET team_id = $1, updated_at = NOW() WHERE id = $2`,
 		teamID, userID,
