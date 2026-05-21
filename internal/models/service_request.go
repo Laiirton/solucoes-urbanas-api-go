@@ -33,6 +33,7 @@ type ServiceRequestDetailResponse struct {
 	CreatedBy    *User                `json:"created_by,omitempty"`
 	Rating       *ServiceRating       `json:"rating,omitempty"`
 	Attendances  []*ServiceAttendance `json:"attendances,omitempty"`
+	ChatMessages []*ChatMessage       `json:"chat_messages,omitempty"`
 	UserRequests int                  `json:"user_requests_count"`
 }
 

@@ -16,17 +16,18 @@ import (
 )
 
 type ServiceRequestHandler struct {
-	srRepo         *repository.ServiceRequestRepository
-	userRepo       *repository.UserRepository
-	regionRepo     *repository.RegionRepository
-	teamRepo       *repository.TeamRepository
-	sysNotifRepo   *repository.SystemNotificationRepository
-	pushTokenRepo  *repository.PushTokenRepository
-	pushService    *services.ExpoPushService
-	uploadService  *services.UploadService
-	geoService     *services.GeocodingService
-	ratingRepo     *repository.ServiceRatingRepository
-	attendanceRepo *repository.ServiceAttendanceRepository
+	srRepo          *repository.ServiceRequestRepository
+	userRepo        *repository.UserRepository
+	regionRepo      *repository.RegionRepository
+	teamRepo        *repository.TeamRepository
+	sysNotifRepo    *repository.SystemNotificationRepository
+	pushTokenRepo   *repository.PushTokenRepository
+	pushService     *services.ExpoPushService
+	uploadService   *services.UploadService
+	geoService      *services.GeocodingService
+	ratingRepo      *repository.ServiceRatingRepository
+	attendanceRepo  *repository.ServiceAttendanceRepository
+	chatMessageRepo *repository.ChatMessageRepository
 }
 
 var statusLabels = map[string]string{
@@ -48,19 +49,21 @@ func NewServiceRequestHandler(
 	geoService *services.GeocodingService,
 	ratingRepo *repository.ServiceRatingRepository,
 	attendanceRepo *repository.ServiceAttendanceRepository,
+	chatMessageRepo *repository.ChatMessageRepository,
 ) *ServiceRequestHandler {
 	return &ServiceRequestHandler{
-		srRepo:         srRepo,
-		userRepo:       userRepo,
-		regionRepo:     regionRepo,
-		teamRepo:       teamRepo,
-		sysNotifRepo:   sysNotifRepo,
-		pushTokenRepo:  pushTokenRepo,
-		pushService:    pushService,
-		uploadService:  uploadService,
-		geoService:     geoService,
-		ratingRepo:     ratingRepo,
-		attendanceRepo: attendanceRepo,
+		srRepo:          srRepo,
+		userRepo:        userRepo,
+		regionRepo:      regionRepo,
+		teamRepo:        teamRepo,
+		sysNotifRepo:    sysNotifRepo,
+		pushTokenRepo:   pushTokenRepo,
+		pushService:     pushService,
+		uploadService:   uploadService,
+		geoService:      geoService,
+		ratingRepo:      ratingRepo,
+		attendanceRepo:  attendanceRepo,
+		chatMessageRepo: chatMessageRepo,
 	}
 }
 
@@ -136,7 +139,7 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 		}
 	}
 
-// 0.5 Team override: attendant/secretary always create for their own team
+	// 0.5 Team override: attendant/secretary always create for their own team
 	var appBairro string
 	var appLat, appLon *float64
 	var appAddress string
@@ -251,6 +254,9 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 
 	attendances, _ := h.attendanceRepo.ListByRequestID(r.Context(), id)
 	detail.Attendances = attendances
+
+	chatMessages, _ := h.chatMessageRepo.ListByRequestID(r.Context(), id)
+	detail.ChatMessages = chatMessages
 
 	respondJSON(w, http.StatusOK, detail)
 }

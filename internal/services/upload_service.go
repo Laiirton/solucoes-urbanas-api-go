@@ -152,6 +152,71 @@ func (s *UploadService) RollbackFiles(urls []string) {
 	}
 }
 
+// UploadChatFiles validates and uploads multiple files for a chat message.
+// Uses a dedicated chat_attachments prefix to keep chat files separate from service request files.
+func (s *UploadService) UploadChatFiles(userID int64, files []*multipart.FileHeader) ([]string, error) {
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	if len(files) > MaxFilesPerRequest {
+		return nil, fmt.Errorf("maximum %d files allowed, got %d", MaxFilesPerRequest, len(files))
+	}
+
+	var totalSize int64
+	for _, fh := range files {
+		if fh.Size > MaxFileSizeBytes {
+			return nil, FileUploadError{Filename: fh.Filename, Reason: fmt.Sprintf("file size exceeds %d MB limit", MaxFileSizeBytes/(1<<20))}
+		}
+		totalSize += fh.Size
+
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		if !AllowedExtensions[ext] {
+			return nil, FileUploadError{Filename: fh.Filename, Reason: fmt.Sprintf("file extension %q is not allowed", ext)}
+		}
+
+		contentType := fh.Header.Get("Content-Type")
+		if contentType != "" && !AllowedMIMETypes[contentType] {
+			return nil, FileUploadError{Filename: fh.Filename, Reason: fmt.Sprintf("content type %q is not allowed", contentType)}
+		}
+	}
+
+	if totalSize > MaxTotalFilesSizeBytes {
+		return nil, fmt.Errorf("total file size exceeds %d MB limit", MaxTotalFilesSizeBytes/(1<<20))
+	}
+
+	var uploadedURLs []string
+	userIDStr := strconv.FormatInt(userID, 10)
+
+	for _, fh := range files {
+		file, err := fh.Open()
+		if err != nil {
+			s.RollbackFiles(uploadedURLs)
+			return nil, FileUploadError{Filename: fh.Filename, Reason: "failed to open file"}
+		}
+
+		contentType := fh.Header.Get("Content-Type")
+		if contentType == "" || !AllowedMIMETypes[contentType] {
+			contentType = "application/octet-stream"
+		}
+
+		ext := filepath.Ext(fh.Filename)
+		filePath := fmt.Sprintf("chat_attachments/%s/%s%s", userIDStr, uuid.New().String(), ext)
+
+		publicURL, err := s.storage.UploadFile(file, filePath, contentType)
+		file.Close()
+
+		if err != nil {
+			s.RollbackFiles(uploadedURLs)
+			return nil, fmt.Errorf("failed to upload file %q: %w", fh.Filename, err)
+		}
+
+		uploadedURLs = append(uploadedURLs, publicURL)
+	}
+
+	return uploadedURLs, nil
+}
+
 // ParseAttachmentURLs parses the attachments JSON and returns the list of URLs.
 // Returns nil if the JSON is empty or cannot be parsed.
 func ParseAttachmentURLs(attachmentsJSON json.RawMessage) []string {

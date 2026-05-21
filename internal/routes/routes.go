@@ -27,6 +27,7 @@ func Setup(
 	ratingRepo *repository.ServiceRatingRepository,
 	attendanceRepo *repository.ServiceAttendanceRepository,
 	categoryRepo *repository.CategoryRepository,
+	chatMessageRepo *repository.ChatMessageRepository,
 	storageService services.StorageService,
 	jwtSecret string,
 ) *chi.Mux {
@@ -51,7 +52,7 @@ func Setup(
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
 	pushService := services.NewExpoPushService()
-	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, regionRepo, teamRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo)
+	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, regionRepo, teamRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo, chatMessageRepo)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)
 	newsHandler := handlers.NewNewsHandler(newsRepo, pushTokenRepo, sysNotifRepo, pushService, storageService)
@@ -62,6 +63,7 @@ func Setup(
 	ratingHandler := handlers.NewServiceRatingHandler(ratingRepo, srRepo)
 	attendanceHandler := handlers.NewServiceAttendanceHandler(attendanceRepo, srRepo, userRepo, uploadService, srHandler)
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo, serviceRepo, srRepo, teamRepo, ratingRepo, userRepo)
+	chatMessageHandler := handlers.NewChatMessageHandler(chatMessageRepo, srRepo, userRepo, uploadService, srHandler)
 
 	// Routes under /api
 	r.Route("/api", func(r chi.Router) {
@@ -135,6 +137,10 @@ func Setup(
 				// Attendance (Handling)
 				r.Post("/attendances", attendanceHandler.CreateAttendance)
 				r.Get("/attendances", attendanceHandler.ListAttendances)
+
+				// Chat Messages
+				r.Post("/chat/messages", chatMessageHandler.CreateChatMessage)
+				r.Get("/chat/messages", chatMessageHandler.ListChatMessages)
 			})
 
 			// Service Ratings
