@@ -111,6 +111,7 @@ func (h *ServiceRequestHandler) DispatchChatMessageNotification(userID *int64, s
 			"service_request_id": req.ID,
 			"protocol_number":    protocol,
 			"screen":             fmt.Sprintf("/(service-requests)/%d", req.ID),
+			"type":               "chat_message",
 		}
 
 		shortBody := bodyPreview
