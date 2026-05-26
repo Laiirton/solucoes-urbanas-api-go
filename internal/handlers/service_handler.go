@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -23,8 +24,6 @@ type ServiceHandler struct {
 func NewServiceHandler(serviceRepo *repository.ServiceRepository, categoryRepo *repository.CategoryRepository, srRepo *repository.ServiceRequestRepository, ratingRepo *repository.ServiceRatingRepository, appConfigRepo *repository.AppConfigRepository) *ServiceHandler {
 	return &ServiceHandler{serviceRepo: serviceRepo, categoryRepo: categoryRepo, srRepo: srRepo, ratingRepo: ratingRepo, appConfigRepo: appConfigRepo}
 }
-
-
 
 // GET /services
 func (h *ServiceHandler) ListServices(w http.ResponseWriter, r *http.Request) {
@@ -96,8 +95,6 @@ func (h *ServiceHandler) ListServicesByCategory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-
-
 	onlyActive := r.URL.Query().Get("all") != "true"
 
 	services, err := h.serviceRepo.ListServicesByCategory(r.Context(), category, onlyActive, nil)
@@ -136,7 +133,6 @@ func (h *ServiceHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Add icons to categories
 	var categoriesWithIcon []models.CategorySummary
 	for _, cat := range categories {
 		categoriesWithIcon = append(categoriesWithIcon, models.CategorySummary{
@@ -155,36 +151,72 @@ func (h *ServiceHandler) GetService(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid service id")
 		return
 	}
+
 	svc, err := h.serviceRepo.GetServiceByID(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "service not found")
 		return
 	}
 
-	// Fetch metrics (log errors but don't fail the whole request)
-	stats, err := h.srRepo.GetServiceStatusStats(r.Context(), id)
-	if err != nil {
-		log.Printf("Warning: failed to fetch status stats for service %d: %v", id, err)
-		stats = []models.StatusStat{}
-	}
-	avgTime, err := h.srRepo.GetAverageServiceTime(r.Context(), id)
-	if err != nil {
-		log.Printf("Warning: failed to fetch avg service time for service %d: %v", id, err)
-	}
-	recent, err := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
-	if err != nil {
-		log.Printf("Warning: failed to fetch recent requests for service %d: %v", id, err)
-		recent = []*models.ServiceRequestDetailResponse{}
-	}
-	ratingStats, err := h.ratingRepo.GetStatsByServiceID(r.Context(), id)
-	if err != nil {
-		log.Printf("Warning: failed to fetch rating stats for service %d: %v", id, err)
-	}
-	recentRatings, err := h.ratingRepo.ListByServiceID(r.Context(), id, 3, 0)
-	if err != nil {
-		log.Printf("Warning: failed to fetch recent ratings for service %d: %v", id, err)
-		recentRatings = []*models.ServiceRatingResponse{}
-	}
+	var (
+		stats         []models.StatusStat
+		avgTime       int
+		recent        []*models.ServiceRequestDetailResponse
+		ratingStats   *models.ServiceRatingStats
+		recentRatings []*models.ServiceRatingResponse
+		wg            sync.WaitGroup
+	)
+
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		s, e := h.srRepo.GetServiceStatusStats(r.Context(), id)
+		if e != nil {
+			log.Printf("Warning: failed to fetch status stats for service %d: %v", id, e)
+			stats = []models.StatusStat{}
+		} else {
+			stats = s
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		at, e := h.srRepo.GetAverageServiceTime(r.Context(), id)
+		if e != nil {
+			log.Printf("Warning: failed to fetch avg service time for service %d: %v", id, e)
+		} else {
+			avgTime = at
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		rq, e := h.srRepo.ListServiceRequestDetailsByService(r.Context(), id, 1, 5)
+		if e != nil {
+			log.Printf("Warning: failed to fetch recent requests for service %d: %v", id, e)
+			recent = []*models.ServiceRequestDetailResponse{}
+		} else {
+			recent = rq
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		rs, e := h.ratingRepo.GetStatsByServiceID(r.Context(), id)
+		if e != nil {
+			log.Printf("Warning: failed to fetch rating stats for service %d: %v", id, e)
+		} else {
+			ratingStats = rs
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		rr, e := h.ratingRepo.ListByServiceID(r.Context(), id, 3, 0)
+		if e != nil {
+			log.Printf("Warning: failed to fetch recent ratings for service %d: %v", id, e)
+			recentRatings = []*models.ServiceRatingResponse{}
+		} else {
+			recentRatings = rr
+		}
+	}()
+	wg.Wait()
 
 	resp := models.ServiceDetailResponse{
 		Service:            svc,
@@ -249,7 +281,6 @@ func (h *ServiceHandler) DeleteService(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "service not found")
 			return
 		}
-		// Probably a foreign key constraint (if service_requests exist)
 		if strings.Contains(err.Error(), "violates foreign key constraint") {
 			respondError(w, http.StatusConflict, "cannot delete service because it has associated service requests. try deactivating it instead.")
 			return

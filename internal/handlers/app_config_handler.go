@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -26,31 +27,50 @@ func NewAppConfigHandler(repo *repository.AppConfigRepository, storage services.
 func (h *AppConfigHandler) GetMobileConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 1. Get Logo
-	var logoURL string
-	if err := h.repo.GetSetting(ctx, "logo_url", &logoURL); err != nil {
-		logoURL = "" // Default or empty
-	}
+	var (
+		logoURL            string
+		banners            []models.AppBanner
+		featuredServices   []models.ServiceSummary
+		featuredCategories []models.CategorySummary
+		wg                 sync.WaitGroup
+	)
 
-	// 2. Get Banners
-	banners, err := h.repo.GetBanners(ctx, true)
-	if err != nil {
-		banners = []models.AppBanner{}
-	}
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		if err := h.repo.GetSetting(ctx, "logo_url", &logoURL); err != nil {
+			logoURL = ""
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		b, e := h.repo.GetBanners(ctx, true)
+		if e != nil {
+			banners = []models.AppBanner{}
+		} else {
+			banners = b
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		fs, e := h.repo.GetFeaturedServices(ctx)
+		if e != nil {
+			featuredServices = []models.ServiceSummary{}
+		} else {
+			featuredServices = fs
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		fc, e := h.repo.GetFeaturedCategories(ctx)
+		if e != nil {
+			featuredCategories = []models.CategorySummary{}
+		} else {
+			featuredCategories = fc
+		}
+	}()
+	wg.Wait()
 
-	// 3. Get Featured Services
-	featuredServices, err := h.repo.GetFeaturedServices(ctx)
-	if err != nil {
-		featuredServices = []models.ServiceSummary{}
-	}
-
-	// 4. Get Featured Categories
-	featuredCategories, err := h.repo.GetFeaturedCategories(ctx)
-	if err != nil {
-		featuredCategories = []models.CategorySummary{}
-	}
-
-	// Build the response
 	response := models.MobileHomeResponse{
 		LogoURL: logoURL,
 		Banners: banners,
@@ -82,7 +102,6 @@ func (h *AppConfigHandler) UpdateSetting(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Image cleanup for logo_url
 	if key == "logo_url" {
 		var oldLogoURL string
 		if err := h.repo.GetSetting(r.Context(), "logo_url", &oldLogoURL); err == nil && oldLogoURL != "" {
@@ -129,7 +148,6 @@ func (h *AppConfigHandler) UpdateBanner(w http.ResponseWriter, r *http.Request) 
 	}
 	banner.ID = id
 
-	// Image cleanup
 	if existing, err := h.repo.GetBannerByID(r.Context(), id); err == nil {
 		if existing.ImageURL != banner.ImageURL {
 			h.deleteFileIfInternal(existing.ImageURL)
@@ -148,7 +166,6 @@ func (h *AppConfigHandler) DeleteBanner(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 
-	// Image cleanup
 	if existing, err := h.repo.GetBannerByID(r.Context(), id); err == nil {
 		h.deleteFileIfInternal(existing.ImageURL)
 	}
@@ -208,8 +225,6 @@ func (h *AppConfigHandler) deleteFileIfInternal(url string) {
 		return
 	}
 
-	// Simple check to see if the URL belongs to our Supabase storage
-	// You can make this more robust if needed by checking the domain
 	if strings.Contains(url, "/storage/v1/object/public/") {
 		_ = h.storage.DeleteFile(url)
 	}
