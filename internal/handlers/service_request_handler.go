@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"strconv"
 	"strings"
 
@@ -153,9 +154,10 @@ func (h *ServiceRequestHandler) CreateServiceRequest(w http.ResponseWriter, r *h
 			regionID = teamForRegion.RegionID
 		}
 	} else {
-		appBairro = extractBairroFromRequestData(req.RequestData)
-		appLat, appLon = extractCoordinatesFromRequestData(req.RequestData)
-		appAddress = extractAddressFromRequestData(req.RequestData)
+		parsedData := parseRequestData(req.RequestData)
+		appBairro = extractBairroFromParsedData(parsedData)
+		appLat, appLon = extractCoordinatesFromParsedData(parsedData)
+		appAddress = extractAddressFromParsedData(parsedData)
 
 		if appBairro != "" {
 			regionID, teamID, _ = h.lookupRegionAndTeam(r.Context(), appBairro, serviceCategory, regionID, teamID)
@@ -221,15 +223,15 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Permission check: user must own the request OR be admin/secretary/attendant of the team
-	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if ok && !CanViewRequest(r.Context(), h.userRepo, h.srRepo, currentUserID, id) {
+	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
+	if err != nil {
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
 
-	sr, err := h.srRepo.GetServiceRequestByID(r.Context(), id)
-	if err != nil {
+	// Permission check using already-fetched SR
+	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if ok && !canViewRequestFromSR(r.Context(), h.userRepo, currentUserID, sr) {
 		respondError(w, http.StatusNotFound, "service request not found")
 		return
 	}
@@ -239,24 +241,54 @@ func (h *ServiceRequestHandler) GetServiceRequest(w http.ResponseWriter, r *http
 	}
 
 	if sr.UserID != nil {
-		user, err := h.userRepo.GetUserByID(r.Context(), *sr.UserID)
-		if err == nil {
-			detail.CreatedBy = user
-		}
-		count, err := h.srRepo.CountServiceRequestsByUser(r.Context(), *sr.UserID)
-		if err == nil {
-			detail.UserRequests = count
-		}
+		var wg sync.WaitGroup
+		var createdBy *models.User
+		var userRequests int
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			u, e := h.userRepo.GetUserByID(r.Context(), *sr.UserID)
+			if e == nil {
+				createdBy = u
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			c, e := h.srRepo.CountServiceRequestsByUser(r.Context(), *sr.UserID)
+			if e == nil {
+				userRequests = c
+			}
+		}()
+		wg.Wait()
+		detail.CreatedBy = createdBy
+		detail.UserRequests = userRequests
 	}
 
-	rating, _ := h.ratingRepo.GetByRequestID(r.Context(), id)
-	detail.Rating = rating
+	{
+		var wg sync.WaitGroup
+		var rating *models.ServiceRating
+		var attendances []*models.ServiceAttendance
+		var chatMessages []*models.ChatMessage
 
-	attendances, _ := h.attendanceRepo.ListByRequestID(r.Context(), id)
-	detail.Attendances = attendances
-
-	chatMessages, _ := h.chatMessageRepo.ListByRequestID(r.Context(), id)
-	detail.ChatMessages = chatMessages
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			rating, _ = h.ratingRepo.GetByRequestID(r.Context(), id)
+		}()
+		go func() {
+			defer wg.Done()
+			attendances, _ = h.attendanceRepo.ListByRequestID(r.Context(), id)
+		}()
+		go func() {
+			defer wg.Done()
+			chatMessages, _ = h.chatMessageRepo.ListByRequestID(r.Context(), id)
+		}()
+		wg.Wait()
+		detail.Rating = rating
+		detail.Attendances = attendances
+		detail.ChatMessages = chatMessages
+	}
 
 	respondJSON(w, http.StatusOK, detail)
 }
@@ -492,18 +524,27 @@ func (h *ServiceRequestHandler) DeleteServiceRequest(w http.ResponseWriter, r *h
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "service request deleted successfully"})
 }
 
-// extractAddressFromRequestData extrai o endereço do JSON de request_data
-func extractAddressFromRequestData(requestData json.RawMessage) string {
+func parseRequestData(requestData json.RawMessage) map[string]interface{} {
 	if len(requestData) == 0 {
-		return ""
+		return nil
 	}
-
 	var data map[string]interface{}
 	if err := json.Unmarshal(requestData, &data); err != nil {
+		return nil
+	}
+	return data
+}
+
+// extractAddressFromRequestData extrai o endereço do JSON de request_data
+func extractAddressFromRequestData(requestData json.RawMessage) string {
+	data := parseRequestData(requestData)
+	if data == nil {
 		return ""
 	}
+	return extractAddressFromParsedData(data)
+}
 
-	// Try prioritized keys first
+func extractAddressFromParsedData(data map[string]interface{}) string {
 	if val := getFirstNonEmpty(data, "endereco", "address", "logradouro", "street"); val != "" {
 		return val
 	}
@@ -523,14 +564,14 @@ func extractAddressFromRequestData(requestData json.RawMessage) string {
 
 // extractBairroFromRequestData extrai o bairro enviado pelo app (via MapModal)
 func extractBairroFromRequestData(requestData json.RawMessage) string {
-	if len(requestData) == 0 {
+	data := parseRequestData(requestData)
+	if data == nil {
 		return ""
 	}
+	return extractBairroFromParsedData(data)
+}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(requestData, &data); err != nil {
-		return ""
-	}
+func extractBairroFromParsedData(data map[string]interface{}) string {
 
 	// Tenta "endereco_bairro" primeiro (enviado explicitamente pelo app)
 	if bairro := getField[string](data, "endereco_bairro"); bairro != "" {
@@ -554,16 +595,15 @@ func extractBairroFromRequestData(requestData json.RawMessage) string {
 }
 
 // extractCoordinatesFromRequestData extrai as coordenadas do JSON de request_data
-// enviadas pelo app quando o usuário seleciona no mapa
 func extractCoordinatesFromRequestData(requestData json.RawMessage) (*float64, *float64) {
-	if len(requestData) == 0 {
+	data := parseRequestData(requestData)
+	if data == nil {
 		return nil, nil
 	}
+	return extractCoordinatesFromParsedData(data)
+}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(requestData, &data); err != nil {
-		return nil, nil
-	}
+func extractCoordinatesFromParsedData(data map[string]interface{}) (*float64, *float64) {
 
 	// First try prioritized keys
 	keys := []string{"endereco_coords", "localizacao_coords"}

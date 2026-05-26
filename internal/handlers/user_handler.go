@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -17,6 +19,8 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var nonDigitsRegex = regexp.MustCompile("[^0-9]")
 
 type UserHandler struct {
 	userRepo *repository.UserRepository
@@ -55,7 +59,6 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	var teamFilter *int64
 	if currentUser.Type != nil && *currentUser.Type == "secretary" {
-		// If listing users without a team, do not filter by secretary's team ID
 		if !teamNull {
 			teamFilter = currentUser.TeamID
 			if teamFilter == nil {
@@ -71,7 +74,6 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Filter to show only users without a team (team_null=true)
 	if teamNull && users != nil {
 		filtered := []*models.User{}
 		for _, u := range users {
@@ -85,7 +87,6 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		users = []*models.User{}
 	}
 
-	// Filter out current user if it's a secretary
 	if currentUser.Type != nil && *currentUser.Type == "secretary" {
 		filtered := []*models.User{}
 		for _, u := range users {
@@ -112,7 +113,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate authentication and authorization
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "unauthorized")
@@ -132,15 +132,12 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	switch *currentUser.Type {
 	case "admin":
-		// Admin can create any type of user
 	case "secretary":
-		// Secretary can only create attendants
 		if req.Type == nil || *req.Type != "attendant" {
 			respondError(w, http.StatusForbidden, "secretaries can only create attendants")
 			return
 		}
 
-		// Auto-assign team and work area from secretary
 		if currentUser.TeamID == nil {
 			respondError(w, http.StatusBadRequest, "secretary does not have a team assigned")
 			return
@@ -152,11 +149,9 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate automatic password if not provided: CPF + birth date (digits only)
 	if req.Password == "" {
-		nonDigits := regexp.MustCompile("[^0-9]")
-		cleanCPF := nonDigits.ReplaceAllString(*req.CPF, "")
-		cleanBirthDate := nonDigits.ReplaceAllString(*req.BirthDate, "")
+		cleanCPF := nonDigitsRegex.ReplaceAllString(*req.CPF, "")
+		cleanBirthDate := nonDigitsRegex.ReplaceAllString(*req.BirthDate, "")
 		req.Password = cleanCPF + cleanBirthDate
 	}
 
@@ -172,7 +167,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sync team categories if creating a secretary with a team
 	if user.Type != nil && *user.Type == "secretary" && user.TeamID != nil && h.teamRepo != nil {
 		h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
 	}
@@ -188,7 +182,6 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Secretário só pode ver usuários do próprio time
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if ok {
 		currentUser, err := h.userRepo.GetUserByID(r.Context(), currentUserID)
@@ -207,27 +200,52 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, err := h.srRepo.CountServiceRequestsByUser(r.Context(), id)
-	if err != nil {
-		total = 0
-	}
+	resp := h.buildUserDetail(r.Context(), id, user)
+	respondJSON(w, http.StatusOK, resp)
+}
 
-	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), id, "", "", nil, 1, 10)
-	if err != nil {
-		requests = []*models.ServiceRequest{}
-	}
+func (h *UserHandler) buildUserDetail(ctx context.Context, userID int64, user *models.User) models.UserDetailResponse {
+	var (
+		total    int
+		requests []*models.ServiceRequest
+		summary  map[string]int
+		wg       sync.WaitGroup
+	)
 
-	summary, err := h.srRepo.CountServiceRequestsByStatusByUser(r.Context(), id)
-	if err != nil {
-		summary = map[string]int{}
-	}
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		t, e := h.srRepo.CountServiceRequestsByUser(ctx, userID)
+		if e == nil {
+			total = t
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		r, e := h.srRepo.ListServiceRequestsByUser(ctx, userID, "", "", nil, 1, 10)
+		if e == nil {
+			requests = r
+		} else {
+			requests = []*models.ServiceRequest{}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		s, e := h.srRepo.CountServiceRequestsByStatusByUser(ctx, userID)
+		if e == nil {
+			summary = s
+		} else {
+			summary = map[string]int{}
+		}
+	}()
+	wg.Wait()
 
-	respondJSON(w, http.StatusOK, models.UserDetailResponse{
+	return models.UserDetailResponse{
 		User:           *user,
 		TotalRequests:  total,
 		Requests:       requests,
 		RequestSummary: summary,
-	})
+	}
 }
 
 // GET /users/me
@@ -244,27 +262,8 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, err := h.srRepo.CountServiceRequestsByUser(r.Context(), userID)
-	if err != nil {
-		total = 0
-	}
-
-	requests, err := h.srRepo.ListServiceRequestsByUser(r.Context(), userID, "", "", nil, 1, 10)
-	if err != nil {
-		requests = []*models.ServiceRequest{}
-	}
-
-	summary, err := h.srRepo.CountServiceRequestsByStatusByUser(r.Context(), userID)
-	if err != nil {
-		summary = map[string]int{}
-	}
-
-	respondJSON(w, http.StatusOK, models.UserDetailResponse{
-		User:           *user,
-		TotalRequests:  total,
-		Requests:       requests,
-		RequestSummary: summary,
-	})
+	resp := h.buildUserDetail(r.Context(), userID, user)
+	respondJSON(w, http.StatusOK, resp)
 }
 
 // PUT /users/{id}
@@ -281,7 +280,6 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get old user data before update (for sync)
 	oldUser, _ := h.userRepo.GetUserByID(r.Context(), id)
 
 	user, err := h.userRepo.UpdateUser(r.Context(), id, &req)
@@ -290,13 +288,10 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sync team categories if user is a secretary and team_id may have changed
 	if h.teamRepo != nil && user.Type != nil && *user.Type == "secretary" {
-		// Sync old team
 		if oldUser != nil && oldUser.TeamID != nil {
 			h.teamRepo.SyncTeamCategories(r.Context(), *oldUser.TeamID)
 		}
-		// Sync new team
 		if user.TeamID != nil {
 			h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
 		}
@@ -313,7 +308,6 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user before deleting to know team_id
 	user, _ := h.userRepo.GetUserByID(r.Context(), id)
 
 	if err := h.userRepo.DeleteUser(r.Context(), id); err != nil {
@@ -321,7 +315,6 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sync team categories if deleted user was a secretary with a team
 	if user != nil && user.Type != nil && *user.Type == "secretary" && user.TeamID != nil && h.teamRepo != nil {
 		h.teamRepo.SyncTeamCategories(r.Context(), *user.TeamID)
 	}
@@ -338,16 +331,13 @@ func (h *UserHandler) UploadProfileImage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate authentication
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	// Users can only upload their own profile image (unless admin)
 	if userID != id {
-		// Check if user is admin
 		user, err := h.userRepo.GetUserByID(r.Context(), userID)
 		if err != nil || (user.Type == nil || *user.Type != "admin") {
 			respondError(w, http.StatusForbidden, "forbidden")
@@ -367,7 +357,6 @@ func (h *UserHandler) UploadProfileImage(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
-	// Validate file type (only images)
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
 	if !allowedExts[ext] {
@@ -375,7 +364,6 @@ func (h *UserHandler) UploadProfileImage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate file size (max 10MB for profile images)
 	if fileHeader.Size > 10<<20 {
 		respondError(w, http.StatusBadRequest, "File size exceeds 10MB limit")
 		return
@@ -383,10 +371,9 @@ func (h *UserHandler) UploadProfileImage(w http.ResponseWriter, r *http.Request)
 
 	contentType := fileHeader.Header.Get("Content-Type")
 	if contentType == "" || !services.AllowedMIMETypes[contentType] {
-		contentType = "image/jpeg" // default
+		contentType = "image/jpeg"
 	}
 
-	// Generate path: profile_images/{userID}/{uuid}.{ext}
 	filename := fmt.Sprintf("profile_images/%d/%s%s", id, uuid.New().String(), ext)
 
 	if h.storage == nil {
@@ -400,13 +387,11 @@ func (h *UserHandler) UploadProfileImage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Update user's profile_image_url in database
 	updateReq := &models.UpdateUserRequest{
 		ProfileImageURL: &imageURL,
 	}
 	_, updateErr := h.userRepo.UpdateUser(r.Context(), id, updateReq)
 	if updateErr != nil {
-		// Rollback: delete uploaded file
 		h.storage.DeleteFile(imageURL)
 		respondError(w, http.StatusInternalServerError, "Failed to update profile")
 		return
@@ -424,14 +409,12 @@ func (h *UserHandler) DeleteProfileImage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate authentication
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int64)
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	// Users can only delete their own profile image (unless admin)
 	if userID != id {
 		user, err := h.userRepo.GetUserByID(r.Context(), userID)
 		if err != nil || (user.Type == nil || *user.Type != "admin") {
@@ -440,7 +423,6 @@ func (h *UserHandler) DeleteProfileImage(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Get current user to fetch profile image URL
 	user, err := h.userRepo.GetUserByID(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "user not found")
@@ -448,10 +430,8 @@ func (h *UserHandler) DeleteProfileImage(w http.ResponseWriter, r *http.Request)
 	}
 
 	if user.ProfileImageURL != nil && *user.ProfileImageURL != "" {
-		// Delete from storage
 		h.storage.DeleteFile(*user.ProfileImageURL)
 
-		// Update database
 		emptyURL := ""
 		updateReq := &models.UpdateUserRequest{
 			ProfileImageURL: &emptyURL,
@@ -465,5 +445,3 @@ func (h *UserHandler) DeleteProfileImage(w http.ResponseWriter, r *http.Request)
 
 	respondJSON(w, http.StatusOK, models.MessageResponse{Message: "Profile image removed successfully"})
 }
-
-// helpers
