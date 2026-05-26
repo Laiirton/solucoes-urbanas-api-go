@@ -80,7 +80,7 @@ func RunMigrations(databaseURL string) error {
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		// If we hit a dirty version, force it back so migrations can re-run
-		if fixErr := m.Force(28); fixErr != nil {
+		if fixErr := m.Force(29); fixErr != nil {
 			return fmt.Errorf("failed to run migrations: %w (force fix also failed: %v)", err, fixErr)
 		}
 		if retryErr := m.Up(); retryErr != nil && retryErr != migrate.ErrNoChange {

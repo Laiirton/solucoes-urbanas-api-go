@@ -57,6 +57,31 @@ func (r *ServiceRatingRepository) GetStatsByServiceID(ctx context.Context, servi
 	return stats, nil
 }
 
+func (r *ServiceRatingRepository) GetStatsByServiceIDs(ctx context.Context, serviceIDs []int64) (map[int64]*models.ServiceRatingStats, error) {
+	if len(serviceIDs) == 0 {
+		return map[int64]*models.ServiceRatingStats{}, nil
+	}
+
+	query := `SELECT service_id, COALESCE(AVG(stars), 0), COUNT(*) FROM service_ratings WHERE service_id = ANY($1) GROUP BY service_id`
+
+	rows, err := r.db.Query(ctx, query, serviceIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stats by service ids: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[int64]*models.ServiceRatingStats, len(serviceIDs))
+	for rows.Next() {
+		var serviceID int64
+		stats := &models.ServiceRatingStats{}
+		if err := rows.Scan(&serviceID, &stats.Average, &stats.Count); err != nil {
+			continue
+		}
+		result[serviceID] = stats
+	}
+	return result, nil
+}
+
 func (r *ServiceRatingRepository) ListByServiceID(ctx context.Context, serviceID int64, limit, offset int) ([]*models.ServiceRatingResponse, error) {
 	query := `
 		SELECT r.id, r.stars, r.comment, u.full_name, COALESCE(u.profile_image_url, ''), r.created_at

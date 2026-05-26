@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type StorageService interface {
@@ -25,7 +26,7 @@ func NewSupabaseStorageService(url, key, bucket string) StorageService {
 		url:    url,
 		key:    key,
 		bucket: bucket,
-		client: &http.Client{},
+		client: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 

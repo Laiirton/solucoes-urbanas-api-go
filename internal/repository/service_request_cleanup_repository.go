@@ -46,5 +46,8 @@ func (r *ServiceRequestRepository) FindCompletedUnrated(ctx context.Context) ([]
 	if results == nil {
 		results = []CompletedRequest{}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return results, nil
 }
