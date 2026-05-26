@@ -65,13 +65,13 @@ func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, 
 	if unreadOnly {
 		if whereApplied {
 			query += ` AND (
-				(sn.user_id IS NOT NULL AND sn.read_at IS NULL)
+				(sn.user_id IS NOT NULL)
 				OR
 				(sn.user_id IS NULL AND nr.read_at IS NULL)
 			)`
 		} else {
 			query += ` WHERE (
-				(sn.user_id IS NOT NULL AND sn.read_at IS NULL)
+				(sn.user_id IS NOT NULL)
 				OR
 				(sn.user_id IS NULL AND nr.read_at IS NULL)
 			)`
@@ -85,7 +85,7 @@ func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, 
 			SELECT 1 FROM news WHERE id::text = sn.data->>'news_id'
 		))
 		OR
-		(sn.type = 'service_request' AND sn.data IS NOT NULL AND sn.data->>'service_request_id' IS NOT NULL AND NOT EXISTS (
+		(sn.type IN ('service_request', 'chat_message', 'rating_reminder') AND sn.data IS NOT NULL AND sn.data->>'service_request_id' IS NOT NULL AND NOT EXISTS (
 			SELECT 1 FROM service_requests WHERE id::text = sn.data->>'service_request_id'
 		))
 	)`
@@ -155,17 +155,15 @@ func (r *SystemNotificationRepository) Update(ctx context.Context, id int64, req
 }
 
 func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64, userID int64) (*models.SystemNotification, error) {
-	// Check if notification is user-specific or broadcast
 	n, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	if n.UserID != nil {
-		// User-specific: update read_at directly
 		query := `
-			UPDATE system_notifications SET read_at = NOW()
-			WHERE id = $1
+			DELETE FROM system_notifications
+			WHERE id = $1 AND user_id IS NOT NULL
 			RETURNING id, user_id, title, body, type, data, read_at, created_at
 		`
 		err = r.db.QueryRow(ctx, query, id).
@@ -174,7 +172,6 @@ func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64,
 			return nil, fmt.Errorf("failed to mark system notification as read: %w", err)
 		}
 	} else {
-		// Broadcast: upsert into notification_reads for this user
 		_, err = r.db.Exec(ctx,
 			`INSERT INTO notification_reads (notification_id, user_id)
 			 VALUES ($1, $2)
@@ -184,25 +181,22 @@ func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64,
 		if err != nil {
 			return nil, fmt.Errorf("failed to mark broadcast notification as read: %w", err)
 		}
-		n.ReadAt = nil // will be populated by caller if needed
+		n.ReadAt = nil
 	}
 
 	return n, nil
 }
 
 func (r *SystemNotificationRepository) MarkAllAsRead(ctx context.Context, userID int64) (int64, error) {
-	// 1. Mark all user-specific notifications as read
-	var userCount int64
 	result, err := r.db.Exec(ctx,
-		`UPDATE system_notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+		`DELETE FROM system_notifications WHERE user_id = $1`,
 		userID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to mark user notifications as read: %w", err)
 	}
-	userCount = result.RowsAffected()
+	userCount := result.RowsAffected()
 
-	// 2. Mark all broadcast notifications as read (per-user in notification_reads)
 	broadcastResult, err := r.db.Exec(ctx,
 		`INSERT INTO notification_reads (notification_id, user_id)
 		 SELECT sn.id, $1
@@ -253,4 +247,48 @@ func (r *SystemNotificationRepository) Delete(ctx context.Context, id int64) err
 		return fmt.Errorf("system notification not found")
 	}
 	return nil
+}
+
+const NotificationExpiryDays = 7
+
+func (r *SystemNotificationRepository) DeleteExpired(ctx context.Context, maxAgeDays int) (int64, error) {
+	if maxAgeDays <= 0 {
+		maxAgeDays = NotificationExpiryDays
+	}
+
+	var totalDeleted int64
+
+	result, err := r.db.Exec(ctx,
+		`DELETE FROM system_notifications
+		 WHERE user_id IS NOT NULL
+		   AND read_at IS NULL
+		   AND created_at < NOW() - ($1 * INTERVAL '1 day')`,
+		maxAgeDays,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete expired user-specific notifications: %w", err)
+	}
+	totalDeleted += result.RowsAffected()
+
+	broadcastResult, err := r.db.Exec(ctx,
+		`DELETE FROM system_notifications
+		 WHERE user_id IS NULL
+		   AND created_at < NOW() - ($1 * INTERVAL '1 day')`,
+		maxAgeDays,
+	)
+	if err != nil {
+		return totalDeleted, fmt.Errorf("failed to delete expired broadcast notifications: %w", err)
+	}
+	totalDeleted += broadcastResult.RowsAffected()
+
+	orphanResult, err := r.db.Exec(ctx,
+		`DELETE FROM notification_reads
+		 WHERE notification_id NOT IN (SELECT id FROM system_notifications)`,
+	)
+	if err != nil {
+		return totalDeleted, fmt.Errorf("failed to delete orphaned notification_reads: %w", err)
+	}
+	totalDeleted += orphanResult.RowsAffected()
+
+	return totalDeleted, nil
 }

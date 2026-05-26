@@ -29,6 +29,7 @@ func Setup(
 	categoryRepo *repository.CategoryRepository,
 	chatMessageRepo *repository.ChatMessageRepository,
 	storageService services.StorageService,
+	pushService *services.ExpoPushService,
 	jwtSecret string,
 ) *chi.Mux {
 	r := chi.NewRouter()
@@ -51,7 +52,6 @@ func Setup(
 	serviceHandler := handlers.NewServiceHandler(serviceRepo, categoryRepo, srRepo, ratingRepo, appConfigRepo)
 	uploadService := services.NewUploadService(storageService)
 	geoService := services.NewGeocodingService()
-	pushService := services.NewExpoPushService()
 	srHandler := handlers.NewServiceRequestHandler(srRepo, userRepo, regionRepo, teamRepo, sysNotifRepo, pushTokenRepo, pushService, uploadService, geoService, ratingRepo, attendanceRepo, chatMessageRepo)
 	geoHandler := handlers.NewGeolocationHandler()
 	homeHandler := handlers.NewHomeHandler(srRepo, userRepo, geoService)

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
+	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
+	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 )
 
 func (h *ServiceRequestHandler) SaveServiceRequestStatusUpdatedNotification(userID *int64, sr *models.ServiceRequest, newStatus string) {
@@ -165,4 +167,57 @@ func (h *ServiceRequestHandler) DispatchServiceRequestStatusUpdated(userID *int6
 			log.Printf("warning: failed to send status update push notification for service request %d: %v", req.ID, err)
 		}
 	}(*userID, sr, newStatus)
+}
+
+func CreateRatingReminderNotification(ctx context.Context, sysNotifRepo *repository.SystemNotificationRepository, sr repository.CompletedRequest) {
+	protocol := sr.ProtocolNumber
+
+	data, _ := json.Marshal(map[string]interface{}{
+		"service_request_id": sr.ID,
+		"protocol_number":    protocol,
+		"screen":             fmt.Sprintf("/(service-requests)/%d", sr.ID),
+	})
+
+	userID := sr.UserID
+	_, err := sysNotifRepo.Create(ctx, &models.SystemNotification{
+		UserID: &userID,
+		Title:  "Avalie seu chamado",
+		Body:   fmt.Sprintf("Seu chamado #%s foi concluído. Avalie o atendimento!", protocol),
+		Type:   "rating_reminder",
+		Data:   data,
+	})
+	if err != nil {
+		log.Printf("warning: failed to save rating reminder notification for SR %d: %v", sr.ID, err)
+	}
+}
+
+func DispatchRatingReminderPush(ctx context.Context, pushTokenRepo *repository.PushTokenRepository, pushService *services.ExpoPushService, sr repository.CompletedRequest) {
+	if pushTokenRepo == nil || pushService == nil {
+		return
+	}
+
+	tokens, err := pushTokenRepo.ListTokensByUser(ctx, sr.UserID)
+	if err != nil {
+		log.Printf("warning: failed to list push tokens for user %d: %v", sr.UserID, err)
+		return
+	}
+
+	if len(tokens) == 0 {
+		return
+	}
+
+	protocol := sr.ProtocolNumber
+
+	data := map[string]any{
+		"service_request_id": sr.ID,
+		"protocol_number":    protocol,
+		"screen":             fmt.Sprintf("/(service-requests)/%d", sr.ID),
+	}
+
+	title := "Avalie seu chamado"
+	body := fmt.Sprintf("Seu chamado #%s foi concluído. Avalie o atendimento!", protocol)
+
+	if err := pushService.SendToUser(ctx, tokens, title, body, "default", data); err != nil {
+		log.Printf("warning: failed to send rating reminder push for SR %d: %v", sr.ID, err)
+	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/config"
 	"github.com/laiirton/solucoes-urbanas-api/internal/database"
+	"github.com/laiirton/solucoes-urbanas-api/internal/handlers"
 	"github.com/laiirton/solucoes-urbanas-api/internal/repository"
 	"github.com/laiirton/solucoes-urbanas-api/internal/routes"
 	"github.com/laiirton/solucoes-urbanas-api/internal/services"
@@ -55,8 +56,9 @@ func main() {
 	chatMessageRepo := repository.NewChatMessageRepository(db.Pool)
 
 	storageService := services.NewSupabaseStorageService(cfg.SupabaseURL, cfg.SupabaseKey, cfg.SupabaseBucket)
+	pushService := services.NewExpoPushService()
 
-	router := routes.Setup(userRepo, serviceRepo, srRepo, newsRepo, teamRepo, regionRepo, pushTokenRepo, sysNotifRepo, appConfigRepo, serviceRatingRepo, attendanceRepo, categoryRepo, chatMessageRepo, storageService, cfg.JWTSecret)
+	router := routes.Setup(userRepo, serviceRepo, srRepo, newsRepo, teamRepo, regionRepo, pushTokenRepo, sysNotifRepo, appConfigRepo, serviceRatingRepo, attendanceRepo, categoryRepo, chatMessageRepo, storageService, pushService, cfg.JWTSecret)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server starting on %s", addr)
@@ -75,6 +77,8 @@ func main() {
 		}
 	}()
 
+	go runCleanupWorker(srRepo, sysNotifRepo, pushTokenRepo, pushService)
+
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -87,4 +91,46 @@ func main() {
 		log.Fatalf("Server shutdown failed: %v", err)
 	}
 	log.Println("Server stopped.")
+}
+
+const cleanupInterval = 6 * time.Hour
+
+func runCleanupWorker(
+	srRepo *repository.ServiceRequestRepository,
+	sysNotifRepo *repository.SystemNotificationRepository,
+	pushTokenRepo *repository.PushTokenRepository,
+	pushService *services.ExpoPushService,
+) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+		deleted, err := sysNotifRepo.DeleteExpired(ctx, repository.NotificationExpiryDays)
+		if err != nil {
+			log.Printf("cleanup: failed to delete expired notifications: %v", err)
+		} else if deleted > 0 {
+			log.Printf("cleanup: deleted %d expired notifications", deleted)
+		}
+
+		unrated, err := srRepo.FindCompletedUnrated(ctx)
+		if err != nil {
+			log.Printf("cleanup: failed to find unrated requests: %v", err)
+			cancel()
+			continue
+		}
+
+		for _, sr := range unrated {
+			notifCtx, notifCancel := context.WithTimeout(ctx, 10*time.Second)
+			handlers.CreateRatingReminderNotification(notifCtx, sysNotifRepo, sr)
+			notifCancel()
+
+			pushCtx, pushCancel := context.WithTimeout(ctx, 10*time.Second)
+			handlers.DispatchRatingReminderPush(pushCtx, pushTokenRepo, pushService, sr)
+			pushCancel()
+		}
+
+		cancel()
+	}
 }
