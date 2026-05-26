@@ -130,11 +130,11 @@ func runCleanupWorker(
 			}
 
 			for _, sr := range unrated {
-				notifCtx, notifCancel := context.WithTimeout(ctx, 10*time.Second)
+				notifCtx, notifCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				handlers.CreateRatingReminderNotification(notifCtx, sysNotifRepo, sr)
 				notifCancel()
 
-				pushCtx, pushCancel := context.WithTimeout(ctx, 10*time.Second)
+				pushCtx, pushCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				handlers.DispatchRatingReminderPush(pushCtx, pushTokenRepo, pushService, sr)
 				pushCancel()
 			}
