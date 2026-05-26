@@ -45,7 +45,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.generateToken(user.ID)
+	token, err := h.generateToken(user.ID, user.Type, user.TeamID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to generate token")
 		return
@@ -104,11 +104,17 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AuthHandler) generateToken(userID int64) (string, error) {
+func (h *AuthHandler) generateToken(userID int64, userType *string, teamID *int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"exp":     time.Now().UTC().Add(30 * 24 * time.Hour).Unix(),
 		"iat":     time.Now().UTC().Unix(),
+	}
+	if userType != nil {
+		claims["user_type"] = *userType
+	}
+	if teamID != nil {
+		claims["team_id"] = *teamID
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.jwtSecret))

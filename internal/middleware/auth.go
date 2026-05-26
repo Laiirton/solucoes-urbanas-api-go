@@ -13,9 +13,14 @@ import (
 
 type contextKey string
 
-const UserIDKey contextKey = "user_id"
+const (
+	UserIDKey   contextKey = "user_id"
+	UserTypeKey contextKey = "user_type"
+	TeamIDKey   contextKey = "team_id"
+)
 
 func Auth(jwtSecret string) func(http.Handler) http.Handler {
+	jwtBytes := []byte(jwtSecret)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -29,7 +34,7 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, jwt.ErrSignatureInvalid
 				}
-				return []byte(jwtSecret), nil
+				return jwtBytes, nil
 			})
 
 			if err != nil || !token.Valid {
@@ -50,13 +55,19 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, int64(userID))
+
+			if userType, ok := claims["user_type"].(string); ok {
+				ctx = context.WithValue(ctx, UserTypeKey, userType)
+			}
+			if teamID, ok := claims["team_id"].(float64); ok {
+				ctx = context.WithValue(ctx, TeamIDKey, int64(teamID))
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// RequireRole returns middleware that restricts access to users with one of the specified roles.
-// It fetches the user from DB to check the type. The user must be authenticated first (via Auth middleware).
 func RequireRole(userRepo *repository.UserRepository, roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +77,19 @@ func RequireRole(userRepo *repository.UserRepository, roles ...string) func(http
 				return
 			}
 
+			// Try context first (from JWT claims)
+			if userType, ok := r.Context().Value(UserTypeKey).(string); ok {
+				for _, role := range roles {
+					if userType == role {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
+				respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "Você não tem permissão para acessar este recurso"})
+				return
+			}
+
+			// Fallback: fetch from DB (for legacy tokens without user_type claim)
 			user, err := userRepo.GetUserByID(r.Context(), userID)
 			if err != nil || user.Type == nil {
 				respondJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "Acesso negado"})

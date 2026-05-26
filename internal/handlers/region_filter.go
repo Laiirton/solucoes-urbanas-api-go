@@ -86,7 +86,6 @@ func CanManageTeam(ctx context.Context, userRepo *repository.UserRepository, use
 // CanViewRequest checks if the user can view the service request.
 // Returns true if the user owns the request OR can manage it (admin/secretary/attendant of the team).
 func CanViewRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
-	// Check if user owns the request first (citizen case)
 	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
 	if err != nil {
 		return false
@@ -94,12 +93,29 @@ func CanViewRequest(ctx context.Context, userRepo *repository.UserRepository, sr
 	if sr.UserID != nil && *sr.UserID == userID {
 		return true
 	}
-	// Then check if user can manage (admin/secretary/attendant of the team)
 	return CanManageRequest(ctx, userRepo, srRepo, userID, requestID)
 }
 
+// canViewRequestFromSR checks if user can view the already-fetched SR.
+func canViewRequestFromSR(ctx context.Context, userRepo *repository.UserRepository, userID int64, sr *models.ServiceRequest) bool {
+	if sr.UserID != nil && *sr.UserID == userID {
+		return true
+	}
+	return canManageRequestFromSR(ctx, userRepo, userID, sr)
+}
+
 // CanManageRequest checks if the user can manage the given service request.
+// This is the public variant that fetches the SR from DB.
 func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, srRepo *repository.ServiceRequestRepository, userID, requestID int64) bool {
+	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
+	if err != nil {
+		return false
+	}
+	return canManageRequestFromSR(ctx, userRepo, userID, sr)
+}
+
+// canManageRequestFromSR checks if user can manage the already-fetched SR.
+func canManageRequestFromSR(ctx context.Context, userRepo *repository.UserRepository, userID int64, sr *models.ServiceRequest) bool {
 	user, err := userRepo.GetUserByID(ctx, userID)
 	if err != nil || user.Type == nil {
 		return false
@@ -113,8 +129,7 @@ func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, 
 		return false
 	}
 
-	sr, err := srRepo.GetServiceRequestByID(ctx, requestID)
-	if err != nil || user.TeamID == nil || user.Team == nil {
+	if user.TeamID == nil || user.Team == nil {
 		return false
 	}
 
@@ -124,14 +139,6 @@ func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, 
 	}
 
 	// Case 2: The request is NOT assigned (TeamID == nil)
-	// The operator can manage it if:
-	// A) The request category matches the team's categories OR the secretary/attendant's work areas on that team
-	// AND
-	// B) The territorial scope matches:
-	//    - Either the team is city-wide (CityWide == true)
-	//    - Or the request region matches the team's region
-	
-	// Collect categories from Team and user's WorkArea
 	var categories []string
 	categories = append(categories, user.Team.Categories...)
 	categories = append(categories, user.WorkArea...)
@@ -140,7 +147,6 @@ func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, 
 		return false
 	}
 
-	// Check territorial scope
 	if user.Team.CityWide {
 		return true
 	}
@@ -152,17 +158,17 @@ func CanManageRequest(ctx context.Context, userRepo *repository.UserRepository, 
 	return false
 }
 
+var accentReplacer = strings.NewReplacer(
+	"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
+	"é", "e", "è", "e", "ê", "e", "ë", "e",
+	"í", "i", "ì", "i", "î", "i", "ï", "i",
+	"ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
+	"ú", "u", "ù", "u", "û", "u", "ü", "u",
+	"ç", "c", "ñ", "n",
+)
+
 func normalizeString(s string) string {
-	s = strings.ToLower(s)
-	r := strings.NewReplacer(
-		"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
-		"é", "e", "è", "e", "ê", "e", "ë", "e",
-		"í", "i", "ì", "i", "î", "i", "ï", "i",
-		"ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
-		"ú", "u", "ù", "u", "û", "u", "ü", "u",
-		"ç", "c", "ñ", "n",
-	)
-	return r.Replace(s)
+	return accentReplacer.Replace(strings.ToLower(s))
 }
 
 func categoryMatches(targetCat string, categories []string) bool {
