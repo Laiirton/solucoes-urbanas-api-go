@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -65,13 +66,13 @@ func (r *SystemNotificationRepository) List(ctx context.Context, userID *int64, 
 	if unreadOnly {
 		if whereApplied {
 			query += ` AND (
-				(sn.user_id IS NOT NULL)
+				(sn.user_id IS NOT NULL AND sn.read_at IS NULL)
 				OR
 				(sn.user_id IS NULL AND nr.read_at IS NULL)
 			)`
 		} else {
 			query += ` WHERE (
-				(sn.user_id IS NOT NULL)
+				(sn.user_id IS NOT NULL AND sn.read_at IS NULL)
 				OR
 				(sn.user_id IS NULL AND nr.read_at IS NULL)
 			)`
@@ -163,10 +164,10 @@ func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64,
 	if n.UserID != nil {
 		query := `
 			DELETE FROM system_notifications
-			WHERE id = $1 AND user_id IS NOT NULL
+			WHERE id = $1 AND user_id = $2
 			RETURNING id, user_id, title, body, type, data, read_at, created_at
 		`
-		err = r.db.QueryRow(ctx, query, id).
+		err = r.db.QueryRow(ctx, query, id, userID).
 			Scan(&n.ID, &n.UserID, &n.Title, &n.Body, &n.Type, &n.Data, &n.ReadAt, &n.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to mark system notification as read: %w", err)
@@ -181,7 +182,16 @@ func (r *SystemNotificationRepository) MarkAsRead(ctx context.Context, id int64,
 		if err != nil {
 			return nil, fmt.Errorf("failed to mark broadcast notification as read: %w", err)
 		}
-		n.ReadAt = nil
+		var readAt time.Time
+		err = r.db.QueryRow(ctx,
+			`SELECT read_at FROM notification_reads WHERE notification_id = $1 AND user_id = $2`,
+			id, userID,
+		).Scan(&readAt)
+		if err != nil {
+			n.ReadAt = nil
+		} else {
+			n.ReadAt = &readAt
+		}
 	}
 
 	return n, nil
@@ -216,23 +226,23 @@ func (r *SystemNotificationRepository) MarkAllAsRead(ctx context.Context, userID
 }
 
 func (r *SystemNotificationRepository) DeleteByTypeAndRefID(ctx context.Context, notifType string, refID int64) error {
-	dataKey := "news_id"
+	refIDStr := strconv.FormatInt(refID, 10)
+
 	switch notifType {
 	case "news":
-		dataKey = "news_id"
+		query := `DELETE FROM system_notifications WHERE type = $1 AND data->>'news_id' = $2`
+		_, err := r.db.Exec(ctx, query, notifType, refIDStr)
+		if err != nil {
+			return fmt.Errorf("failed to delete system notifications by ref: %w", err)
+		}
 	case "service_request":
-		dataKey = "service_request_id"
+		query := `DELETE FROM system_notifications WHERE type IN ($1, $2, $3) AND data->>'service_request_id' = $4`
+		_, err := r.db.Exec(ctx, query, "service_request", "chat_message", "rating_reminder", refIDStr)
+		if err != nil {
+			return fmt.Errorf("failed to delete system notifications by ref: %w", err)
+		}
 	default:
 		return fmt.Errorf("unsupported notification type for cascade delete: %s", notifType)
-	}
-
-	query := fmt.Sprintf(
-		`DELETE FROM system_notifications WHERE type = $1 AND data->>'%s' = $2`,
-		dataKey,
-	)
-	_, err := r.db.Exec(ctx, query, notifType, strconv.FormatInt(refID, 10))
-	if err != nil {
-		return fmt.Errorf("failed to delete system notifications by ref: %w", err)
 	}
 	return nil
 }

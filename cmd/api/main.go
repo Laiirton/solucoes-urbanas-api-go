@@ -77,7 +77,8 @@ func main() {
 		}
 	}()
 
-	go runCleanupWorker(srRepo, sysNotifRepo, pushTokenRepo, pushService)
+	stopCleanup := make(chan struct{})
+	go runCleanupWorker(stopCleanup, srRepo, sysNotifRepo, pushTokenRepo, pushService)
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
@@ -85,6 +86,7 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down...")
+	close(stopCleanup)
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
@@ -96,6 +98,7 @@ func main() {
 const cleanupInterval = 6 * time.Hour
 
 func runCleanupWorker(
+	stop <-chan struct{},
 	srRepo *repository.ServiceRequestRepository,
 	sysNotifRepo *repository.SystemNotificationRepository,
 	pushTokenRepo *repository.PushTokenRepository,
@@ -104,33 +107,39 @@ func runCleanupWorker(
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	for {
+		select {
+		case <-stop:
+			log.Println("cleanup: worker stopped")
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-		deleted, err := sysNotifRepo.DeleteExpired(ctx, repository.NotificationExpiryDays)
-		if err != nil {
-			log.Printf("cleanup: failed to delete expired notifications: %v", err)
-		} else if deleted > 0 {
-			log.Printf("cleanup: deleted %d expired notifications", deleted)
-		}
+			deleted, err := sysNotifRepo.DeleteExpired(ctx, repository.NotificationExpiryDays)
+			if err != nil {
+				log.Printf("cleanup: failed to delete expired notifications: %v", err)
+			} else if deleted > 0 {
+				log.Printf("cleanup: deleted %d expired notifications", deleted)
+			}
 
-		unrated, err := srRepo.FindCompletedUnrated(ctx)
-		if err != nil {
-			log.Printf("cleanup: failed to find unrated requests: %v", err)
+			unrated, err := srRepo.FindCompletedUnrated(ctx)
+			if err != nil {
+				log.Printf("cleanup: failed to find unrated requests: %v", err)
+				cancel()
+				continue
+			}
+
+			for _, sr := range unrated {
+				notifCtx, notifCancel := context.WithTimeout(ctx, 10*time.Second)
+				handlers.CreateRatingReminderNotification(notifCtx, sysNotifRepo, sr)
+				notifCancel()
+
+				pushCtx, pushCancel := context.WithTimeout(ctx, 10*time.Second)
+				handlers.DispatchRatingReminderPush(pushCtx, pushTokenRepo, pushService, sr)
+				pushCancel()
+			}
+
 			cancel()
-			continue
 		}
-
-		for _, sr := range unrated {
-			notifCtx, notifCancel := context.WithTimeout(ctx, 10*time.Second)
-			handlers.CreateRatingReminderNotification(notifCtx, sysNotifRepo, sr)
-			notifCancel()
-
-			pushCtx, pushCancel := context.WithTimeout(ctx, 10*time.Second)
-			handlers.DispatchRatingReminderPush(pushCtx, pushTokenRepo, pushService, sr)
-			pushCancel()
-		}
-
-		cancel()
 	}
 }

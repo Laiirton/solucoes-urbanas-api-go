@@ -60,11 +60,8 @@ func (h *ServiceRequestHandler) SaveChatMessageNotification(userID *int64, sr *m
 			protocol = *req.ProtocolNumber
 		}
 
-		// Truncate content for notification body (max 120 chars)
-		shortBody := bodyPreview
-		if len(shortBody) > 120 {
-			shortBody = shortBody[:120] + "..."
-		}
+		// Truncate content for notification body (max 120 chars), safe for multi-byte UTF-8
+		shortBody := truncateRunes(bodyPreview, 120)
 
 		data, _ := json.Marshal(map[string]interface{}{
 			"service_request_id": req.ID,
@@ -116,10 +113,7 @@ func (h *ServiceRequestHandler) DispatchChatMessageNotification(userID *int64, s
 			"type":               "chat_message",
 		}
 
-		shortBody := bodyPreview
-		if len(shortBody) > 120 {
-			shortBody = shortBody[:120] + "..."
-		}
+		shortBody := truncateRunes(bodyPreview, 120)
 
 		title := fmt.Sprintf("Nova mensagem de %s", name)
 
@@ -220,4 +214,12 @@ func DispatchRatingReminderPush(ctx context.Context, pushTokenRepo *repository.P
 	if err := pushService.SendToUser(ctx, tokens, title, body, "default", data); err != nil {
 		log.Printf("warning: failed to send rating reminder push for SR %d: %v", sr.ID, err)
 	}
+}
+
+func truncateRunes(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes]) + "..."
 }
