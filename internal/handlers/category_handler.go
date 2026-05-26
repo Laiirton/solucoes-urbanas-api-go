@@ -144,6 +144,12 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	// 5. Calculate Service Details
+	serviceIDs := make([]int64, len(services))
+	for i, s := range services {
+		serviceIDs[i] = s.ID
+	}
+	ratingsByService, _ := h.ratingRepo.GetStatsByServiceIDs(r.Context(), serviceIDs)
+
 	serviceDetails := make([]models.CategoryServiceDetail, len(services))
 	for i, s := range services {
 		serviceRequests := 0
@@ -156,10 +162,9 @@ func (h *CategoryHandler) GetCategoryDetails(w http.ResponseWriter, r *http.Requ
 				}
 			}
 		}
-		
+
 		avgRating := 0.0
-		stats, err := h.ratingRepo.GetStatsByServiceID(r.Context(), s.ID)
-		if err == nil {
+		if stats, ok := ratingsByService[s.ID]; ok {
 			avgRating = stats.Average
 		}
 

@@ -20,6 +20,12 @@ import (
 	"github.com/laiirton/solucoes-urbanas-api/internal/services"
 )
 
+var (
+	slugSanitizeRegex = regexp.MustCompile(`[^a-z0-9\s-]`)
+	slugSpaceRegex    = regexp.MustCompile(`\s+`)
+	supabaseURLRegex  = regexp.MustCompile(`https?://[^\s"'\\]+/storage/v1/object/public/[^\s"'\\]+`)
+)
+
 type NewsHandler struct {
 	repo          *repository.NewsRepository
 	pushTokenRepo *repository.PushTokenRepository
@@ -40,8 +46,8 @@ func NewNewsHandler(repo *repository.NewsRepository, pushTokenRepo *repository.P
 
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
-	slug = regexp.MustCompile(`[^a-z0-9\s-]`).ReplaceAllString(slug, "")
-	slug = regexp.MustCompile(`\s+`).ReplaceAllString(slug, "-")
+	slug = slugSanitizeRegex.ReplaceAllString(slug, "")
+	slug = slugSpaceRegex.ReplaceAllString(slug, "-")
 	slug = strings.Trim(slug, "-")
 	if len(slug) > 100 {
 		slug = slug[:100]
@@ -235,8 +241,7 @@ func extractSupabaseURLs(content []byte, imageURLs []string) []string {
 	var urls []string
 	urls = append(urls, imageURLs...)
 
-	re := regexp.MustCompile(`https?://[^\s"'\\]+/storage/v1/object/public/[^\s"'\\]+`)
-	matches := re.FindAllString(string(content), -1)
+	matches := supabaseURLRegex.FindAllString(string(content), -1)
 	urls = append(urls, matches...)
 
 	uniqueUrls := make(map[string]bool)
@@ -270,7 +275,6 @@ func (h *NewsHandler) DeleteNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cascade delete related system notifications
 	if h.sysNotifRepo != nil {
 		if err := h.sysNotifRepo.DeleteByTypeAndRefID(r.Context(), "news", id); err != nil {
 			log.Printf("warning: failed to delete system notifications for news %d: %v", id, err)
