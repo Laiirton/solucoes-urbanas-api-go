@@ -190,9 +190,20 @@ func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authorization: only admins or the team secretary can view members
+	// Check authorization: admin, secretary, or team attendant
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+	if ok {
+		user, userErr := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if userErr == nil && user.Type != nil && *user.Type == "attendant" {
+			if user.TeamID == nil || *user.TeamID != id {
+				respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
+				return
+			}
+		} else if !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+			respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
+			return
+		}
+	} else {
 		respondError(w, http.StatusForbidden, "only admins or the team secretary can view members")
 		return
 	}
@@ -201,6 +212,17 @@ func (h *TeamHandler) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list team members")
 		return
+	}
+
+	// Filter out the current user from the member list
+	if ok {
+		filtered := make([]*models.User, 0, len(members))
+		for _, m := range members {
+			if m.ID != currentUserID {
+				filtered = append(filtered, m)
+			}
+		}
+		members = filtered
 	}
 
 	respondJSON(w, http.StatusOK, members)
@@ -286,9 +308,20 @@ func (h *TeamHandler) GetTeamDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authorization: only admins or the team secretary can view stats
+	// Check authorization: admin, secretary, or team attendant
 	currentUserID, ok := r.Context().Value(middleware.UserIDKey).(int64)
-	if !ok || !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+	if ok {
+		user, userErr := h.userRepo.GetUserByID(r.Context(), currentUserID)
+		if userErr == nil && user.Type != nil && *user.Type == "attendant" {
+			if user.TeamID == nil || *user.TeamID != id {
+				respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
+				return
+			}
+		} else if !CanManageTeam(r.Context(), h.userRepo, currentUserID, id) {
+			respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
+			return
+		}
+	} else {
 		respondError(w, http.StatusForbidden, "Você não tem permissão para acessar este recurso")
 		return
 	}
