@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/middleware"
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
@@ -76,11 +78,19 @@ func (h *HomeHandler) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HomeHandler) asyncGeocodeRequest(id int64, address string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	geoResult, err := h.geoService.GeocodeAddress(address)
-	if err != nil || !geoResult.Found {
+	if err != nil {
+		log.Printf("home: geocoding failed for SR %d: %v", id, err)
+		return
+	}
+	if !geoResult.Found {
 		return
 	}
 
-	ctx := context.Background()
-	h.srRepo.SaveGeocoding(ctx, id, geoResult.Latitude, geoResult.Longitude, geoResult.DisplayName)
+	if err := h.srRepo.SaveGeocoding(ctx, id, geoResult.Latitude, geoResult.Longitude, geoResult.DisplayName); err != nil {
+		log.Printf("home: failed to save geocoding for SR %d: %v", id, err)
+	}
 }
