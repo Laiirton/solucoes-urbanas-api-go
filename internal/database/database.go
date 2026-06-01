@@ -27,13 +27,14 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("unable to parse database config: %w", err)
 	}
 
-	// Connection pool optimization — Supabase pooler limita a 15 conexões (session mode)
-	// Valores baixos propositalmente: durante deploy, instância antiga + nova coexistem
-	config.MaxConns = 3                               // Max connections (~10-15% do limite do pooler)
-	config.MinConns = 1                              // Min idle connections
-	config.MaxConnLifetime = 30 * time.Minute        // Max lifetime of a connection (menor = mais rotatividade)
-	config.MaxConnIdleTime = 5 * time.Minute         // Max idle time before closing
-	config.HealthCheckPeriod = 5 * time.Minute       // Period between health checks
+	// Connection pool tuning — Supabase pooler limita a 15 conexões (session mode).
+	// MaxConns=8 dá margem para o errgroup de GetHomeStats rodar 8 queries em
+	// paralelo. MaxConnIdleTime >= MaxConnLifetime evita connection churn.
+	config.MaxConns = 8
+	config.MinConns = 2
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 30 * time.Minute
+	config.HealthCheckPeriod = 5 * time.Minute
 
 	// Statement cache for better performance
 	config.ConnConfig.RuntimeParams["statement_cache"] = "describe"
@@ -61,7 +62,7 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("unable to ping database after 5 retries: %w", pingErr)
 	}
 
-	log.Printf("Database connection pool configured: min=%d, max=%d, max_lifetime=%v", 
+	log.Printf("Database connection pool configured: min=%d, max=%d, max_lifetime=%v",
 		config.MinConns, config.MaxConns, config.MaxConnLifetime)
 	return &DB{Pool: pool}, nil
 }

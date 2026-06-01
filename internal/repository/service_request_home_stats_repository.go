@@ -8,18 +8,92 @@ import (
 	"time"
 
 	"github.com/laiirton/solucoes-urbanas-api/internal/models"
+	"golang.org/x/sync/errgroup"
 )
 
+// GetHomeStats fans out the underlying compute* queries in parallel using
+// errgroup. The previous implementation ran them sequentially, which on a
+// busy pool made /api/home take 500-800ms.
+//
+// Execution model:
+//   - Wave 1: 8 independent queries run concurrently (status, metrics, popular,
+//     top-rated, team, alerts, recent trio, volume7d). All use the errgroup
+//     context so a fatal error in any goroutine cancels the others.
+//   - Wave 2: computeCategories depends on `total` returned by statusStats, so
+//     it runs after Wave 1 completes.
+//
+// Concurrency is bounded by errgroup.SetLimit to avoid starving the pgx pool.
 func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin bool, userID int64, regionFilter, teamFilter *int64, startDate, endDate *string) (*models.HomeResponse, error) {
 	baseWhere, args := buildBaseWhere(isAdmin, userID, regionFilter, teamFilter, startDate, endDate)
 
-	statusCounts, total := r.computeStatusStats(ctx, baseWhere, args)
-	pct := calcPercentFunc(total)
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
 
-	stats, err := r.computeAggregatedMetrics(ctx, isAdmin, baseWhere, args)
-	if err != nil {
+	var (
+		statusCounts             map[string]int
+		total                    int
+		stats                    *models.HomeStats
+		popularServices          []models.PopularService
+		topRatedServices         []models.TopRatedService
+		teamPerf                 []models.TeamPerformance
+		alerts                   []models.HomeAlert
+		recent, delayed, newReqs []models.RecentRequest
+		volume7d                 []models.VolumeStat
+	)
+
+	g.Go(func() error {
+		sc, t := r.computeStatusStats(gCtx, baseWhere, args)
+		statusCounts = sc
+		total = t
+		return nil
+	})
+
+	g.Go(func() error {
+		s, err := r.computeAggregatedMetrics(gCtx, isAdmin, baseWhere, args)
+		if err != nil {
+			return err
+		}
+		stats = s
+		return nil
+	})
+
+	g.Go(func() error {
+		popularServices = r.computePopularServices(gCtx, baseWhere, args)
+		return nil
+	})
+
+	g.Go(func() error {
+		topRatedServices = r.computeTopRatedServices(gCtx, baseWhere, args)
+		return nil
+	})
+
+	g.Go(func() error {
+		teamPerf = r.computeTeamPerformance(gCtx)
+		return nil
+	})
+
+	g.Go(func() error {
+		alerts = r.computeAlerts(gCtx, baseWhere, args)
+		return nil
+	})
+
+	g.Go(func() error {
+		recent, delayed, newReqs = r.computeRecentRequests(gCtx, baseWhere, args)
+		return nil
+	})
+
+	g.Go(func() error {
+		volume7d = r.computeVolume7d(gCtx, baseWhere, args)
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+
+	pct := calcPercentFunc(total)
+	categories := r.computeCategories(ctx, baseWhere, args, total)
+
 	stats.TotalRequests = models.StatDetail{Total: total, Percent: 100}
 	stats.PendingRequests = models.StatDetail{Total: statusCounts["pending"], Percent: pct(statusCounts["pending"], total)}
 	stats.InProgressRequests = models.StatDetail{Total: statusCounts["in_progress"], Percent: pct(statusCounts["in_progress"], total)}
@@ -29,20 +103,11 @@ func (r *ServiceRequestRepository) GetHomeStats(ctx context.Context, isAdmin boo
 	stats.UrgentRequests = models.StatDetail{Total: 0, Percent: 0}
 	unresolved := statusCounts["pending"] + statusCounts["in_progress"]
 	stats.UnresolvedRequests = models.StatDetail{Total: unresolved, Percent: pct(unresolved, total)}
-
-	popularServices := r.computePopularServices(ctx, baseWhere, args)
-	topRatedServices := r.computeTopRatedServices(ctx, baseWhere, args)
-	teamPerf := r.computeTeamPerformance(ctx)
-	alerts := r.computeAlerts(ctx, baseWhere, args)
-	categories := r.computeCategories(ctx, baseWhere, args, total)
-	recent, delayed, newReqs := r.computeRecentRequests(ctx, baseWhere, args)
-	volume7d := r.computeVolume7d(ctx, baseWhere, args)
-
 	stats.PopularServices = popularServices
 	stats.TeamPerformance = teamPerf
 
 	return &models.HomeResponse{
-		Stats: *stats,
+		Stats:            *stats,
 		Categories:       categories,
 		RecentRequests:   recent,
 		DelayedRequests:  delayed,
